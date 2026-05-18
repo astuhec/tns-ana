@@ -991,11 +991,7 @@ def chi_UV(U, V, pi_mn, pi_nm):
             chi_i += chi_ij
 
         chi += chi_i
-    return chi / Nk * 2 # factor 2 for spin      
-
-# Build it once, reuse across all omega calls
-rho_tilde_cache = {}   # i -> rhos_tilde[i], populated lazily
-rho_tilde_lock = threading.Lock()
+    return chi / Nk      
 
 def get_rho_tilde(i, cache, factory, lock):
     if i not in cache:
@@ -1003,6 +999,14 @@ def get_rho_tilde(i, cache, factory, lock):
             if i not in cache:
                 cache[i] = factory(i)
     return cache[i]
+
+def clear_rho_tilde_cache(rho_tilde_cache, rho_tilde_lock, cache=None, lock=None):
+    if cache is None:
+        cache = rho_tilde_cache
+    if lock is None:
+        lock = rho_tilde_lock
+    with lock:
+        cache.clear()
 
 def compute_single_om_fused(
     om,
@@ -1028,11 +1032,11 @@ def compute_single_om_fused(
     for i in range(Nop):
         eps_i = parities[i]
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
-        for j in range(i,Nop):
+        for j in range(Nop):
             eps_j = parities[j]
             rho_j = get_rho_tilde(j, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
             chi0[i, j] = chi_UV(rho_i, rho_j, pi_mn, pi_nm)
-            chi0[j, i] = chi0[i, j] * eps_i * eps_j
+            chi0[j, i] = chi_UV(rho_j, rho_i, pi_mn, pi_nm)
 
     # ── chi_jj0 ────────────────────────────────────────────────────────
     chi_jj0_x = chi_UV(tok_tilde_x, tok_tilde_x, pi_mn, pi_nm)
@@ -1056,11 +1060,11 @@ def compute_single_om_fused(
         eps_i = parities[i]
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
         chi_jrho0_x[i] = chi_UV(tok_tilde_x, rho_i, pi_mn, pi_nm)
-        chi_rhoj0_x[i] = chi_jrho0_x[i] * eps_i * (-1) #chi_UV(rhos_tilde[i], tok_tilde_x, pi_mn, pi_nm)
+        chi_rhoj0_x[i] = chi_UV(rho_i, tok_tilde_x, pi_mn, pi_nm)
         chi_jErho0_x[i] = chi_UV(tok_tilde_x, rho_i, piw_mn, piw_nm)
         chi_matrho0_x[i] = chi_UV(mat_tilde_x, rho_i, pi_mn, pi_nm)
         chi_jrho0_y[i] = chi_UV(tok_tilde_y, rho_i, pi_mn, pi_nm)
-        chi_rhoj0_y[i] = chi_jrho0_y[i] * eps_i * (-1)#chi_UV(rhos_tilde[i], tok_tilde_y, pi_mn, pi_nm)
+        chi_rhoj0_y[i] = chi_UV(rho_i, tok_tilde_y, pi_mn, pi_nm)
         chi_jErho0_y[i] = chi_UV(tok_tilde_y, rho_i, piw_mn, piw_nm)
         chi_matrho0_y[i] = chi_UV(mat_tilde_y, rho_i, pi_mn, pi_nm)
 
@@ -1124,16 +1128,6 @@ def compute_chi(
     dchi_jEj_arr_y = np.zeros(N_om, dtype=np.complex128)
 
     t_total = time.time()
-
-    def _worker(om_idx, om):
-        result = compute_single_om_fused(
-            om,        # om = frequency value, omegas = full array
-            Gamma, mu_, invt, nodes, weights,
-            thetas, parities, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
-            energije, rho_tilde_factory, rho_tilde_cache, rho_tilde_lock, eps=eps
-        )
-        return om_idx, result
-
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
@@ -1403,12 +1397,13 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
     Nk = Ny * Nx
     rho_eq = np.copy(rho)
     
-    # initialize timing and operators
+    # Initialize timing and operators
     t_fock = t_hartree = t_evolve = t_measure = 0.0
     measure_operators_raw = build_measure_operators(measure_provider, Kymesh, rho, geom, phases, g_ffts, a, b, U, V)
 
-    # force it to be 5D: (Nop, dim, dim, Ny, Nx)
+    # Force it to be 5D: (Nop, dim, dim, Ny, Nx)
     if measure_operators_raw.ndim == 4:
+        # Add the missing 'u' dimension at index 0
         measure_operators = measure_operators_raw[np.newaxis, :, :, :, :]
     else:
         measure_operators = measure_operators_raw
@@ -1423,6 +1418,7 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
 
     rho_expvals = np.zeros((N_points, measure_operators.shape[0]), dtype=np.complex128)
     
+    # Start the persistent process pool
     with ProcessPoolExecutor(max_workers=8) as executor:
         for i in range(N_points):
             t_now = i * dt
@@ -1451,13 +1447,16 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
                     h0 = helpers.H_hartree(rho_guess, Nk, U, V)
                     t_hartree += time.perf_counter() - start
                     
+                    # For the corrector, we need the HF fields at the GUESSED next step
+                    # We'll calculate f1, h1 after the first evolution
                 
+                # 2. Evolution Logic
                 start = time.perf_counter()
                 
-                # apply initial relaxation if Gamma > 0
+                # Apply initial relaxation if Gamma > 0
                 rho_to_evolve = relax_rho(rho_start, rho_eq, dt/2, Gamma) if Gamma != 0 else rho_start
                 
-                # determine Hamiltonian for this iteration
+                # Determine Hamiltonian for this iteration
                 if corr_step == 0:
                     # Predictor: Use H(t)
                     H_eff = H_full(Ny, Nx, hop - A_t * perturbation_operator, f0, h0)
@@ -1465,36 +1464,36 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
                     # Corrector: Use average H
                     H_eff = H_full(Ny, Nx, hop - A_half * perturbation_operator, 0.5*(f0+f1), 0.5*(h0+h1))
 
-                # flatten for parallel solver
+                # Flatten for parallel solver
                 H_flat = np.ascontiguousarray(H_eff.transpose(2, 3, 0, 1).reshape(-1, 6, 6))
                 rho_flat = np.ascontiguousarray(rho_to_evolve.transpose(2, 3, 0, 1).reshape(-1, 6, 6))
                 
-                # solve on worker processes
+                # Solve on worker processes
                 rho_new_flat = parallel_density_evolution(H_flat, rho_flat, dt, executor)
                 rho_new = rho_new_flat.reshape(Ny, Nx, 6, 6).transpose(2, 3, 0, 1)
 
-                # final relaxation
+                # Final relaxation
                 if Gamma != 0:
                     rho_new = relax_rho(rho_new, rho_eq, dt/2, Gamma)
                 
                 t_evolve += time.perf_counter() - start
 
-                # 3. convergence Check
+                # 3. Convergence Check
                 err = np.max(np.abs(rho_new - rho_guess))
                 rho_guess = rho_new
 
                 if not do_freeze:
-                    # update fields for the next corrector iteration
+                    # Update fields for the next corrector iteration
                     f1 = helpers.H_fock(Kxmesh, Nk, rho_guess, a, V)
                     h1 = helpers.H_hartree(rho_guess, Nk, U, V)
 
                 if err < tol:
                     break
             
-            # step complete
+            # Step complete
             rho = rho_guess
 
-            # 4. measurement
+            # 4. Measurement
             start = time.perf_counter()
             rho_clean = np.ascontiguousarray(rho, dtype=np.complex128)
             rho_expvals[i] = measure(measure_operators, rho_clean) 
@@ -1504,26 +1503,26 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
     return dt * np.arange(N_points), rho_expvals, times
 
 ''' susceptibility obtained from temporal response, using Fourier transform. window exp(-eta*t) is applied '''
-def susceptibility(time, signal, pulz, eta, omega_cut, Nk):
+def susceptibility(time, signal, probe, eta, omega_cut, Nk):
     dt = time[1] - time[0]
     window = np.exp(- eta * time)
     
     signal_omega = np.fft.fft((signal - signal[0]) * window * dt) / Nk
-    pulz_omega = np.fft.fft(pulz * window * dt)
+    probe_omega = np.fft.fft(probe * window * dt)
 
     omega = 2*np.pi*np.fft.fftfreq(len(time), d=dt)
 
     pos = (omega > 0) * (omega < omega_cut)
     omega = omega[pos]
     signal_omega = signal_omega[pos]
-    pulz_omega = pulz_omega[pos]
+    probe_omega = probe_omega[pos]
 
-    return omega, signal_omega, pulz_omega
+    return omega, signal_omega, probe_omega
 
 ''' optical conductivity calculated from susceptibility obtained from temporal response'''
-def optical_conductivity(time, signal, pulz, eta, omega_cut, Nk):
-    omega, signal_omega, pulz_omega = susceptibility(time, signal, pulz, eta, omega_cut, Nk)
-    sigma_omega = signal_omega / (-1j * omega * pulz_omega)
+def optical_conductivity(time, signal, probe, eta, omega_cut, Nk):
+    omega, signal_omega, probe_omega = susceptibility(time, signal, probe, eta, omega_cut, Nk)
+    sigma_omega = signal_omega / (-1j * omega * probe_omega)
 
     return omega, sigma_omega.real
 
