@@ -13,7 +13,7 @@ dir1 = 'C:\\Users\\anast\\OneDrive\\Namizje\\1m\\poletje\\ta2nise5'
 DIR1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", dir1))
 sys.path.append(DIR1)
 
-import helpers_tns_fullBZ as helpers
+import tns_helpers as helpers
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 

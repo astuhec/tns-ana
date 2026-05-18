@@ -12,14 +12,14 @@ from tqdm import tqdm
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.chdir("/Users/ana/Desktop/tns-ana/main-programs/")
+#os.chdir("/Users/ana/Desktop/tns-ana/main-programs/")
 
 import tns_helpers as helpers
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
 
-def kinetic(file = "parametri-kinetic.txt", extend=None, faktor=1.):
+def kinetic(file="parametri-kinetic.txt", extend=None, faktor=1.0):
     seznam = []
     with open(file, 'r') as f:
         for line in f:
@@ -80,8 +80,7 @@ def j_tok(Kymesh, Kxmesh, a, b, b2, file):
     jmatrix[1] = jy
     return jmatrix
 
-
-def j_Fock(rho, Kymesh, Kxmesh, a, b, b2, V):
+''' def j_Fock(rho, Kymesh, Kxmesh, a, b, b2, V):
     pos = positions(a, b, b2)
     Ny, Nx = Kymesh.shape
     Nk = Ny * Nx
@@ -105,7 +104,7 @@ def j_Fock(rho, Kymesh, Kxmesh, a, b, b2, V):
             for nu in range(2):
                 tok[nu,5,orb-1] += osnova * lega[nu]
                 tok[nu,orb-1,5] += (osnova * lega[nu]).conjugate()
-    return tok
+    return tok '''
 
 # HF stands for Hellmann-Feynmann
 def velocity_HF(Kymesh, Kxmesh, a, b, file):
@@ -132,23 +131,23 @@ def velocity_fock_HF(rho, Kymesh, Kxmesh, a, V):
     Ny, Nx = Kymesh.shape
     Nk = Ny*Nx
 
-    fock = np.zeros(rho.shape, dtype='complex')
+    fock_velocity = np.zeros(rho.shape, dtype='complex')
 
     deltas = [0., a]
     for delta in deltas:
-        fock[4,0] += -V * fock_sum(rho[4,0], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
-        fock[4,1] += -V * fock_sum(rho[4,1], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
-    fock[0,4] = fock[4,0].conjugate()
-    fock[1,4] = fock[4,1].conjugate()
+        fock_velocity[4,0] += -V * fock_sum(rho[4,0], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
+        fock_velocity[4,1] += -V * fock_sum(rho[4,1], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
+    fock_velocity[0,4] = fock_velocity[4,0].conjugate()
+    fock_velocity[1,4] = fock_velocity[4,1].conjugate()
 
     deltas = [0., -a]
     for delta in deltas:
-        fock[5,2] += -V * fock_sum(rho[5,2], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
-        fock[5,3] += -V * fock_sum(rho[5,3], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
-    fock[2,5] = fock[5,2].conjugate()
-    fock[3,5] = fock[5,3].conjugate()
+        fock_velocity[5,2] += -V * fock_sum(rho[5,2], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
+        fock_velocity[5,3] += -V * fock_sum(rho[5,3], Kxmesh, delta) * np.exp(1j * Kxmesh * delta) / Nk * 1j * delta
+    fock_velocity[2,5] = fock_velocity[5,2].conjugate()
+    fock_velocity[3,5] = fock_velocity[5,3].conjugate()
 
-    return fock
+    return fock_velocity
 
 @njit
 def expit_stable(x):
@@ -173,7 +172,7 @@ def delta_approximation(x, width, shape='Gaussian'):
     if shape == 'Gaussian':
         return 1/(2*np.pi*width**2)**0.5 * np.exp(-x**2/(2*width**2))
     elif shape == 'Lorentzian':
-        return 1/np.pi * width/(x**2 + width**2)
+        return 1/np.pi * width / (x**2 + width**2)
     
 @njit(parallel=False, cache=True)
 def phi_boltzmann(Kymesh, Kxmesh, velocity_x, velocity_y, energije, omegas, mu, faktor=1., shape='Gaussian'):
@@ -246,34 +245,11 @@ def Kn_boltzmann(velocity_x, velocity_y, energije, mu, T):
                 K1_x.append( multiply * en[m,n] * fd1_[m,n] * velx[m,n]**2 )
                 K1_y.append( multiply * en[m,n] * fd1_[m,n] * vely[m,n]**2 )   
 
-    K0_x = kahan_sum(K0_x) * 2 / Nk# factor 2 for spin
+    K0_x = kahan_sum(K0_x) * 2 / Nk # factor 2 for spin
     K0_y = kahan_sum(K0_y) * 2 / Nk
     K1_x = kahan_sum(K1_x) * 2 / Nk
     K1_y = kahan_sum(K1_y) * 2 / Nk   
     return K0_x, K0_y, K1_x, K1_y
-
-@njit
-def spektralna_k(epsilon, mu, energije_k, Gamma, faktor=1.):
-    N_orb = len(energije_k)
-    A = np.zeros(N_orb)
-    for orb in range(N_orb):
-        if orb > 1: gamma = Gamma * faktor
-        else: gamma = Gamma
-        A[orb] = 1/np.pi * gamma / ( (epsilon - (energije_k[orb] - mu))**2 + gamma**2 )
-    return A
-
-@njit(parallel=True, cache=True)
-def Spektralka(epsilons, mu, energije, Gamma, faktor=1.):
-    Norb, Ny, Nx = energije.shape
-    Nomega = len(epsilons)
-    A = np.zeros((Nomega, Norb, Ny, Nx))
-    for i in prange(Nomega):
-        eps = epsilons[i]
-        for m in range(Ny):
-            for n in range(Nx):
-                A_k = spektralna_k(eps, mu, energije[:,m,n], Gamma, faktor=faktor)
-                A[i,:,m,n] = A_k
-    return A
 
 @njit
 def spektralna_orb(omegas, mu, energije_k, Gamma):
@@ -1087,7 +1063,7 @@ def compute_chi(
     Gamma, mu_, invt, nodes, weights,
     thetas, parities, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
     energije,
-    rho_tilde_factory, rho_tilde_cache,
+    rho_tilde_factory,
     verbose=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
     eps=1e-5
@@ -1157,13 +1133,10 @@ def compute_chi(
 
                 if verbose:
                     print(
-                        f"  [om {om_idx+1}/{N_om}]",
+                        f" Progress om {om_idx+1}/{N_om}",
                         flush=True
                     )
                 pbar.update(1)
-
-    if verbose:
-        print(f"\nTotal time: {time.time() - t_total:.2f}s")
 
     results_x = {'chi0' : chi0_arr,
                'chi' : chi_rpa_arr,
@@ -1390,7 +1363,8 @@ upon application of a perturbation (generated by perturbation_operator)
 '''
 def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, measure_provider,
                   A0, t0_pulse, sigma, Omega, dt, t_max, Gamma,
-                  do_freeze, Ncorr, tol, geom, phases, g_ffts, show_print=True):
+                  do_freeze, Ncorr, tol, geom, phases, g_ffts, show_print=True,
+                  hartree_list=None):
     
     N_points = int(t_max/dt)
     Ny, Nx = Kymesh.shape
@@ -1411,7 +1385,7 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
     measure_operators = np.ascontiguousarray(measure_operators, dtype=np.complex128)
     
     fock_eq = helpers.H_fock(Kxmesh, Nk, rho, a, V)
-    hartree_eq = helpers.H_hartree(rho, Nk, U, V)
+    hartree_eq = helpers.H_hartree(rho, Nk, U, V, hartree_list)
 
     f_max = np.max(np.abs(fock_eq))
     h_max = np.max(np.abs(hartree_eq))
@@ -1444,7 +1418,7 @@ def simulate_pulz(Kymesh, Kxmesh, hop, rho, a, b, U, V, perturbation_operator, m
                     t_fock += time.perf_counter() - start
                     
                     start = time.perf_counter()
-                    h0 = helpers.H_hartree(rho_guess, Nk, U, V)
+                    h0 = helpers.H_hartree(rho_guess, Nk, U, V, hartree_list)
                     t_hartree += time.perf_counter() - start
                     
                     # For the corrector, we need the HF fields at the GUESSED next step

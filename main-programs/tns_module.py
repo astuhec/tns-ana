@@ -13,9 +13,6 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
-                 
-                 #a, b, b2, c, Ny, Nx, U, V, mu0, parameters1, parameters2, eps0, n_target, faktor=1.,
-                 #rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -48,43 +45,44 @@ class TNS:
 
         self.hop = helpers.H_hopping(self.kymesh, self.kxmesh, self.a, self.b, faktor=self.faktor, file=hopping_file)
         self.perturb = helpers.H_perturb(self.kymesh, self.kxmesh, self.a, self.b, file=perturbation_file)
+        self.hartree_list = helpers.make_hartree_list(interaction_file)
 
         self.rho = helpers.Rho0(self.Ny, self.Nx)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V)
+        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
 
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
         if energije == None:
-            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-10, maxiter=5000, N_epsilon=5)
+            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-10, maxiter=5000, N_epsilon=5, hartree_list=self.hartree_list)
         else:
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
         self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
         self.rho0 = self.rho
         self.mu0 = self.mu
 
+        print(self.n)
+        phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
+        self.phi = phi_full[0]
+        print('-' * 80)
+        print(f'Found ground state.' + '\n' + 'Order parameter components are:' + '\n' + \
+              f'phi_15 = {np.round(phi_full[0], 5)}' + '\n' + \
+              f'phi_25 = {np.round(phi_full[1], 5)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[2], 5)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[3], 5)}' + '\n' + '-' * 80 + '\n'  + \
+              f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
+              f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 80
+            )
+        
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
         self.kinetic = tokovi.kinetic(faktor=self.faktor, file=hopping_file)
         self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
-        self.interaction = tokovi.interaction()
+        self.interaction = tokovi.interaction(file=interaction_file)
         self.pos = tokovi.positions(self.a, self.b, self.b2)
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.interaction_exp, self.thetas, self.parities = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
         self.velocities()
-
-
-        phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
-        self.phi = phi_full[0]
-        print('-' * 50)
-        print(f'Found ground state.' + '\n' + 'Order parameter components are:'
-              f'phi_15 = {np.round(phi_full[0], 5)}' + '\n' + \
-              f'phi_25 = {np.round(phi_full[1], 5)}' + '\n' + \
-              f'phi_36 = {np.round(phi_full[2], 5)}' + '\n' + \
-              f'phi_36 = {np.round(phi_full[3], 5)}' + '\n' + '-' * 50 + '\n'  + \
-              f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
-              f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 50
-            )
         
         self.phis = []
         self.mus = []
@@ -149,7 +147,7 @@ class TNS:
         mu_candidate = self.mu
         rho, energije, fs, vecs, fock, hartree, err, n, mu = helpers.NewMu(self.n_target, self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
                                                                 self.a, self.U, self.V, self.T, mu_candidate, 
-                                                                dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials)
+                                                                dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
         self.rho = rho
         self.energije = energije
         self.fs = fs
@@ -160,13 +158,30 @@ class TNS:
         self.err = err
         self.n = n
 
-    def run_Tdependence(self, betas, stops, Gammas, params, evaluate_transport_DC=True, evaluate_vertex_DC=True, save_during=False, file_name=None):
+    def run_Tdependence(self, temperature_file, evaluate_transport_DC=True, evaluate_vertex_DC=True, save_during=False, file_name=None):
+        
+        with open(temperature_file, "r", encoding="utf-8") as f:
+            params_all = json.load(f)
+
+        Gammas = params_all['Gammas']
+        params = params_all['params']
         Nomega = params['Nomega']
         eps = params['eps']
-        omega0 = params['omega0']
+        omega0_low = params['omega0_low']
+        omega0_high = params['omega0_high']
+        omega0_len = params['omega0_len']
+        omega0 = np.logspace(omega0_low, omega0_high, omega0_len)
         eps2 = params['eps2']
         deg = params['deg']
         n_workers = params['n_workers']
+
+        betas0 = params_all['beta0']
+        scale = params_all['scale']
+        Nbetas = params_all['Nbetas']
+        freq_betas = params_all['freq_betas']
+        betas = betas0 / scale**np.arange(1, Nbetas+1)
+        max_stop = int(Nbetas // freq_betas)
+        stops = [freq_betas*i for i in range(1, max_stop+1)]
 
         if evaluate_vertex_DC:
             nodes, weights = roots_legendre(deg)
@@ -175,7 +190,6 @@ class TNS:
             T = 1/beta
             self.T = T
             if i not in stops:
-                print(f'{i/len(betas)} started evaluating at beta={beta}', flush=True)
                 if (i+1) in stops:
                     rho_save = self.rho
                     energije_save = self.energije
@@ -188,17 +202,15 @@ class TNS:
                     n_save = self.n
                 self.next_T(2)
             else:
-                print(f'{i/len(betas)} started evaluating at beta={beta}', flush=True)
                 self.next_T(1)
                 self.Ts.append(T)
                 self.phis.append(helpers.Phi(self.kxmesh, self.rho, self.a)[0].real)
-                print(f'----{self.phis[-1]}----')
+                print(f'Progress {i/len(betas)}, beta={int(beta)}, phi={np.round(self.phis[-1],5)}', flush=True)
                 self.transport_gaps.append(np.min(self.energije[2]) - np.max(self.energije[1]))
                 self.optical_gaps.append(np.min(self.energije[2] - self.energije[1]))
                 self.mus.append(self.mu)
                 self.errors.append(self.err)
                 self.occupations.append(self.n)
-                #print(f'occupation error is {np.abs(self.n - self.n_target)}')
 
                 if evaluate_transport_DC:
                     self.DC_coefficients(eps, Nomega, Gammas)
@@ -379,16 +391,16 @@ class TNS:
 
     def reset(self):
         self.rho = self.rho0
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V)
+        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.mu = self.mu0
 
     def reset_infty(self):
         self.rho = helpers.Rhoinfty(self.Ny, self.Nx)
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V)
+        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         
-        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.kymesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.b, self.b2, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5)
+        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.kymesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.b, self.b2, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
         self.energije = energije
         self.fs = fs
         self.vecs = vecs
@@ -416,7 +428,7 @@ class TNS:
     def revisit_T(self) -> None:
         self.mu = self.mu_T
         self.rho = self.rho_T
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V)
+        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.energije = self.energije_T
         self.vecs = self.vecs_T
@@ -430,7 +442,7 @@ class TNS:
         fock = self.fock
         mu = self.mu
         for i in range(steps):
-            rho_new, energije_new, _, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, maxiter, mix, epsilon, 0.0, 5)
+            rho_new, energije_new, _, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, maxiter, mix, epsilon, 0.0, 5, hartree_list=self.hartree_list)
             if np.sign(n_target - n0) * np.sign(n - n_target) == +1:
                 break
             print(n, flush=True)
