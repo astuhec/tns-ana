@@ -28,19 +28,18 @@ class TNS:
         self.kymesh = Kymesh
         self.hop = helpers.H_hopping(self.kymesh, self.kxmesh, a, b, faktor=self.faktor)
         self.perturb = helpers.H_perturb(self.kymesh, self.kxmesh, a, b)
-        self.rho = helpers.Rho0(self.Ny, self.Nx, n_target=n_target)
+        self.rho = helpers.Rho0(self.Ny, self.Nx)
         self.mu = mu0
 
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, a, V)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, U, V)
 
-        if mu == None:
-            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, a, U, V, epsilon=1e-10, maxiter=1000, N_epsilon=5)
-            # Use occupation-aware mu suggestion
-            self.mu = helpers.suggest_mu_for_occupation(self.energije, n_target, self.Nk)
+        if energije == None:
+            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, a, U, V, epsilon=1e-10, maxiter=3000, N_epsilon=5)
         else:
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
-            self.mu = mu
+        self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor)
         self.kinetic = tokovi.kinetic(faktor=self.faktor)
         self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)

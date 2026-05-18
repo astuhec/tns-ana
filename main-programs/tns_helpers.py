@@ -9,11 +9,6 @@ import os
 os.chdir("/Users/ana/Desktop/tns-ana/main-programs/")
 
 def Rho0(Ny, Nx):
-    """
-    Initialize density matrix for target occupation n.
-    Special handling for n≈2 for optimal convergence (band structure natural point).
-    For other n, fills from highest orbitals downward.
-    """
     rho0 = np.zeros((6, 6, Ny, Nx), dtype='complex')
     
     rho0[5, 5, :, :] = 1.0

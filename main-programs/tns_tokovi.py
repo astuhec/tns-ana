@@ -262,16 +262,6 @@ def spektralna_k(epsilon, mu, energije_k, Gamma, faktor=1.):
         A[orb] = 1/np.pi * gamma / ( (epsilon - (energije_k[orb] - mu))**2 + gamma**2 )
     return A
 
-@njit
-def spektralna_k(epsilon, mu, energije_k, Gamma, faktor=1.):
-    N_orb = len(energije_k)
-    A = np.zeros(N_orb)
-    for orb in range(N_orb):
-        if orb > 1: gamma = Gamma * faktor
-        else: gamma = Gamma
-        A[orb] = 1/np.pi * gamma / ( (epsilon - (energije_k[orb] - mu))**2 + gamma**2 )
-    return A
-
 @njit(parallel=True, cache=True)
 def Spektralka(epsilons, mu, energije, Gamma, faktor=1.):
     Norb, Ny, Nx = energije.shape
