@@ -158,10 +158,13 @@ class TNS:
         self.err = err
         self.n = n
 
-    def run_Tdependence(self, temperature_file, evaluate_transport_DC=True, evaluate_vertex_DC=True, save_during=False, file_name=None):
+    def run_Tdependence(self, temperature_file, save_during=False, file_name=None):
         
         with open(temperature_file, "r", encoding="utf-8") as f:
             params_all = json.load(f)
+
+        evaluate_transport_DC = params_all['evaluate_transport_DC']
+        evaluate_vertex_DC = params_all['evaluate_vertex_DC'],
 
         Gammas = params_all['Gammas']
         params = params_all['params']
@@ -231,7 +234,7 @@ class TNS:
 
                 if save_during:
                     results_intermediate = self.collect_results()
-                    np.savez(f'{file_name}.npz', **results_intermediate)
+                    np.savez(f'{file_name}', **results_intermediate)
 
     def ls_kubo(self, epsilons, Gamma, mfd1):
         phi_x = tokovi.phi_Kubo(self.tok_x1, self.tok_x1, epsilons, self.energije, Gamma, self.mu)

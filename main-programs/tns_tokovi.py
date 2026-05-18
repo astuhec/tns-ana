@@ -1111,7 +1111,7 @@ def compute_chi(
             for om_idx, om in enumerate(omegas)
         }
 
-        with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
+        with tqdm(total=N_om, desc="Progress:", disable=not verbose) as pbar:
             for future in as_completed(futures):
                 om_idx, result = future.result()
                 om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y = result
@@ -1130,12 +1130,7 @@ def compute_chi(
                 dchi_jEj_arr_y[om_idx] = dchi_jEj_y
                 chi_matj0_arr_y[om_idx] = chi_matj0_y
                 dchi_matj_arr_y[om_idx] = dchi_matj_y
-
-                if verbose:
-                    print(
-                        f" Progress om {om_idx+1}/{N_om}",
-                        flush=True
-                    )
+                
                 pbar.update(1)
 
     results_x = {'chi0' : chi0_arr,
