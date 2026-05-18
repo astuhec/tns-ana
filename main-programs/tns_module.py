@@ -11,81 +11,80 @@ import tns_tokovi as tokovi
 
 ''' create TNS class '''
 class TNS:
-    def __init__(self, file, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
+    def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
+                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
                  
                  #a, b, b2, c, Ny, Nx, U, V, mu0, parameters1, parameters2, eps0, n_target, faktor=1.,
                  #rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
         
-        with open(file, "r", encoding="utf-8") as f:
+        ''' read input parameter and initialize the system '''
+        with open(input_file, "r", encoding="utf-8") as f:
             params = json.load(f)
-        
-        U = params["U"] # eV
-        V = params["V"] # eV
-        a = params["a"] # A
-        b = params["b"] # A
-        b2 = params["b2"] # A
-        c = params["c"] # A
 
-        parameters1 = list(params["parameters1"].values())
-        parameters2 = list(params["parameters2"].values())
+        self.Ny, self.Nx = params["Ny"], params["Nx"]
+        self.Nk = self.Ny * self.Nx
+        self.U = params["U"] # eV
+        self.V = params["V"] # eV
+        self.a = params["a"] # A
+        self.b = params["b"] # A
+        self.b2 = params["b2"] # A
+        self.c = params["c"] # A
 
-        Ny, Nx = params["Ny"], params["Nx"]
-        mu0 = params["mu"]
+        self.parameters1 = list(params["parameters1"].values())
+        self.parameters2 = list(params["parameters2"].values())
+
+        self.mu = params["mu"]
         eps0 = params["eps0"]
 
-        n_target = params["n_target"]
-        faktor = params["faktor"]
+        self.n_target = params["n_target"]
+        self.faktor = params["faktor"]
 
-        Ny = params["Ny"]
-        Nx = params["Nx"]
-
-        self.a, self.b, self.b2, self.c = a, b, b2, c
-        self.U, self.V = U, V
-        self.faktor = faktor
-        self.n_target = n_target
-        self.parameters1 = parameters1
-        self.parameters2 = parameters2
-        self.Nx, self.Ny = Nx, Ny
-        self.Nk = Ny * Nx
-        Ky = 2*np.pi/b * np.arange(-Ny//2, Ny//2) / Ny
-        Kx = 2*np.pi/a * np.arange(-Nx/2, Nx//2) / Nx 
+        Ky = 2*np.pi/self.b * np.arange(-self.Ny//2, self.Ny//2) / self.Ny
+        Kx = 2*np.pi/self.a * np.arange(-self.Nx//2, self.Nx//2) / self.Nx 
         Kxmesh, Kymesh = np.meshgrid(Kx, Ky)
         self.nx = Kymesh.shape[1]
         self.kxmesh = Kxmesh
         self.kymesh = Kymesh
-        self.hop = helpers.H_hopping(self.kymesh, self.kxmesh, a, b, faktor=self.faktor)
-        self.perturb = helpers.H_perturb(self.kymesh, self.kxmesh, a, b)
+
+        self.hop = helpers.H_hopping(self.kymesh, self.kxmesh, self.a, self.b, faktor=self.faktor, file=hopping_file)
+        self.perturb = helpers.H_perturb(self.kymesh, self.kxmesh, self.a, self.b, file=perturbation_file)
+
         self.rho = helpers.Rho0(self.Ny, self.Nx)
-        self.mu = mu0
+        self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
+        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V)
 
-        self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, a, V)
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, U, V)
-
+        ''' if ground state is not provided, compute it 
+            else: use the provided gorund state'''
         if energije == None:
-            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, a, U, V, epsilon=1e-10, maxiter=3000, N_epsilon=5)
+            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-10, maxiter=5000, N_epsilon=5)
         else:
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
         self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+        self.rho0 = self.rho
+        self.mu0 = self.mu
 
-        self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor)
-        self.kinetic = tokovi.kinetic(faktor=self.faktor)
+        self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
+        self.kinetic = tokovi.kinetic(faktor=self.faktor, file=hopping_file)
         self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction()
         self.pos = tokovi.positions(self.a, self.b, self.b2)
-        self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, a, b, self.pos, self.kinetic_extend, self.interaction)
-        #self.g_ffts = tokovi.G_ffts(self.phases, self.Ny, self.nx)
+        self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.interaction_exp, self.thetas, self.parities = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
-        self.rhos = tokovi.rho_operators(len(self.thetas), self.kymesh, self.kxmesh, self.interaction, self.a, self.b)
-
         self.velocities()
 
-        self.rho0 = self.rho
-        self.mu0 = self.mu
 
-        self.phi = helpers.Phi(self.kxmesh, self.rho, self.a)[0].real
-        self.Phi_x = []
-        self.Phi_y = []
+        phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
+        self.phi = phi_full[0]
+        print('-' * 50)
+        print(f'Found ground state.' + '\n' + 'Order parameter components are:'
+              f'phi_15 = {np.round(phi_full[0], 5)}' + '\n' + \
+              f'phi_25 = {np.round(phi_full[1], 5)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[2], 5)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[3], 5)}' + '\n' + '-' * 50 + '\n'  + \
+              f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
+              f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 50
+            )
         
         self.phis = []
         self.mus = []
@@ -93,7 +92,6 @@ class TNS:
         self.optical_gaps = []
         self.errors = []
         self.occupations = []
-
         self.Ts = []
 
         self.L11x_boltz = []
@@ -128,7 +126,7 @@ class TNS:
         self.velocity_x = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[0] + self.dfock_dk[0], self.vecs).real)
         self.velocity_y = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[1] + self.dfock_dk[1], self.vecs).real)
 
-        # Kubo's velocities: expectation values of current operator
+        # Kubo's velocities
         self.tok_x1 = tokovi.operator_tilde(self.tok[0], self.vecs)
         self.tok_y1 = tokovi.operator_tilde(self.tok[1], self.vecs)
 
@@ -139,18 +137,18 @@ class TNS:
         self.mat_x = mat_tilde[0]
         self.mat_y = mat_tilde[1]
         
-    def density_of_states(self, omegas, faktor):
-        return helpers.DoS(self.kymesh, self.kxmesh, self.energije, omegas, self.mu, self.velocity_x, self.velocity_y, faktor=faktor)
+    def density_of_states(self, epsilons):
+        return helpers.DoS(self.kymesh, self.kxmesh, self.energije, epsilons, self.mu, self.velocity_x, self.velocity_y, faktor=self.faktor)
 
-    def next_T(self, T, i) -> None:
-        if i == 1: dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials = self.parameters1
-        elif i ==2: dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials = self.parameters2
-        if len(self.mus) > 1:
-            mu_candidate = self.mu
-        else:
-            mu_candidate = self.mu
+    def next_T(self, i) -> None:
+        if i == 1:
+            dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials = self.parameters1
+        elif i == 2:
+            dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials = self.parameters2
+
+        mu_candidate = self.mu
         rho, energije, fs, vecs, fock, hartree, err, n, mu = helpers.NewMu(self.n_target, self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
-                                                                self.a, self.U, self.V, T, mu_candidate, 
+                                                                self.a, self.U, self.V, self.T, mu_candidate, 
                                                                 dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials)
         self.rho = rho
         self.energije = energije
@@ -188,10 +186,10 @@ class TNS:
                     mu_save = self.mu
                     err_save = self.err
                     n_save = self.n
-                self.next_T(T, 2)
+                self.next_T(2)
             else:
                 print(f'{i/len(betas)} started evaluating at beta={beta}', flush=True)
-                self.next_T(T, 1)
+                self.next_T(1)
                 self.Ts.append(T)
                 self.phis.append(helpers.Phi(self.kxmesh, self.rho, self.a)[0].real)
                 print(f'----{self.phis[-1]}----')
