@@ -2,6 +2,7 @@
 import numpy as np
 import sys
 from scipy.special import roots_legendre
+import json
 
 sys.path.append("/Users/ana/Desktop/tns-ana/main-programs/") 
 
@@ -10,8 +11,34 @@ import tns_tokovi as tokovi
 
 ''' create TNS class '''
 class TNS:
-    def __init__(self, a, b, b2, c, Ny, Nx, U, V, mu0, parameters1, parameters2, eps0, n_target, faktor=1.,
-                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, mu=None):
+    def __init__(self, file, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
+                 
+                 #a, b, b2, c, Ny, Nx, U, V, mu0, parameters1, parameters2, eps0, n_target, faktor=1.,
+                 #rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
+        
+        with open(file, "r", encoding="utf-8") as f:
+            params = json.load(f)
+        
+        U = params["U"] # eV
+        V = params["V"] # eV
+        a = params["a"] # A
+        b = params["b"] # A
+        b2 = params["b2"] # A
+        c = params["c"] # A
+
+        parameters1 = list(params["parameters1"].values())
+        parameters2 = list(params["parameters2"].values())
+
+        Ny, Nx = params["Ny"], params["Nx"]
+        mu0 = params["mu"]
+        eps0 = params["eps0"]
+
+        n_target = params["n_target"]
+        faktor = params["faktor"]
+
+        Ny = params["Ny"]
+        Nx = params["Nx"]
+
         self.a, self.b, self.b2, self.c = a, b, b2, c
         self.U, self.V = U, V
         self.faktor = faktor
