@@ -1,7 +1,7 @@
 {
   "beta0": 250,
   "scale": 1.005,
-  "Nbetas": 20,
+  "Nbetas": 5,
   "freq_betas": 3,
   "Gammas": [0.008],
   "params": {

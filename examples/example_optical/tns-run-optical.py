@@ -24,8 +24,6 @@ elif computer == 'ana':
 print('Running on computer: ' + DIR)
 sys.path.insert(0, DIR + 'main-programs/')
 import tns_module as module
-import tns_helpers as helpers
-import tns_tokovi as tokovi
 
 hopping_file = DIR + 'main-programs/parameters-kinetic.txt'
 interaction_file = DIR + 'main-programs/parameters-interaction.txt'
@@ -54,24 +52,37 @@ s.run_Tdependence(input_temperature)
 ## Update current vertices, rotated to the band basis.
 s.velocities()
 
-# Find optical responses
+## Find optical responses
 omega0, results_x, results_y = s.optical_responses(input_optical)
 
-''' plot optical conductivity '''
-fig, ax = plt.subplots(ncols=2, figsize=(8,4))
+plot_conductivity = True
 
-sigma_x = -results_x['chi_jj0'].imag / omega0
-dsigma_x = -results_x['dchi_jj'].imag / omega0
-ax[0].plot(omega0, sigma_x, label='without vertex corrections')
-ax[0].plot(omega0, sigma_x + dsigma_x, label='with vertex corrections')
-ax[0].set_xlabel(r'$\omega\,(\text{eV})$')
-sigma_y = -results_y['chi_jj0'].imag / omega0
-dsigma_y = -results_y['dchi_jj'].imag / omega0
-ax[1].plot(omega0, sigma_y, label='without vertex corrections')
-ax[1].plot(omega0, sigma_y + dsigma_y, label='with vertex corrections')
-ax[1].set_xlabel(r'$\omega\,(\text{eV})$')
+a = 3.51 # A
+b = 15.79 # A
+c = 13.42 # A
+V0 = a * b * c
+G0 = 25.8 * 1e3 # 1/Ohm
 
-ax[0].set_ylabel(r'$\sigma_x$')
-ax[1].set_ylabel(r'$\sigma_y$') 
-plt.show()
+prefactor = 4 * np.pi * 1e10 / V0 / G0 # prefactor to get conductivity into right units, i.e. 1/Ohm m
+
+if plot_conductivity:
+    fig, ax = plt.subplots(ncols=2, figsize=(8,4))
+
+    # direction x (axis a)
+    sigma_x = -results_x['chi_jj0'].imag / omega0 * prefactor
+    dsigma_x = -results_x['dchi_jj'].imag / omega0 * prefactor
+    ax[0].plot(omega0, sigma_x, label='without vertex corrections')
+    ax[0].plot(omega0, sigma_x + dsigma_x, label='with vertex corrections')
+    ax[0].set_xlabel(r'$\omega\,(\text{eV})$')
+
+    # direction y (axis b)
+    sigma_y = -results_y['chi_jj0'].imag / omega0 * prefactor
+    dsigma_y = -results_y['dchi_jj'].imag / omega0 * prefactor
+    ax[1].plot(omega0, sigma_y, label='without vertex corrections')
+    ax[1].plot(omega0, sigma_y + dsigma_y, label='with vertex corrections')
+    ax[1].set_xlabel(r'$\omega\,(\text{eV})$')
+
+    ax[0].set_ylabel(r'$\sigma_x$')
+    ax[1].set_ylabel(r'$\sigma_y$') 
+    plt.show()
 ####################################################################################################################
