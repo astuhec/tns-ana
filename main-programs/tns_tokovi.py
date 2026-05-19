@@ -707,23 +707,20 @@ def mf_matrix4(Kymesh, Kxmesh, rho, a, b, U, V, pos, kinetic, interaction):
 def interaction_expand(interaction, U, V, a):
     storing = []
     thetas = []
-    parities = []
     for i, (x, _, orb1, orb2) in enumerate(interaction):
         if orb1 == orb2:
             nus = [0]
             Vs = [U/4]
             delta = 0.
             thetas += Vs
-            parities += [1]
             storing.append([orb1, orb2, delta, nus, Vs])
         elif orb1 < orb2:
             nus = [0,1,2,3]
             Vs = [V, -V/2, -V/2, -V]
             delta = a * x
             thetas += Vs
-            parities += [1, 1, -1, 1]
             storing.append([orb1, orb2, delta, nus, Vs])
-    return storing, thetas, parities
+    return storing, thetas
 
 
 sigmas = np.zeros((4, 2, 2), dtype=np.complex128)
@@ -987,7 +984,7 @@ def clear_rho_tilde_cache(rho_tilde_cache, rho_tilde_lock, cache=None, lock=None
 def compute_single_om_fused(
     om,
     Gamma, mu_, invt, nodes, weights,
-    thetas, parities, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
+    thetas, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
     energije,
     rho_tilde_factory, rho_tilde_cache, rho_tilde_lock,
     eps=1e-5
@@ -1006,10 +1003,8 @@ def compute_single_om_fused(
     chi0 = np.zeros((Nop, Nop), dtype=np.complex128)
     
     for i in range(Nop):
-        eps_i = parities[i]
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
         for j in range(Nop):
-            eps_j = parities[j]
             rho_j = get_rho_tilde(j, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
             chi0[i, j] = chi_UV(rho_i, rho_j, pi_mn, pi_nm)
             chi0[j, i] = chi_UV(rho_j, rho_i, pi_mn, pi_nm)
@@ -1033,7 +1028,6 @@ def compute_single_om_fused(
     chi_jErho0_y = np.zeros(Nop, dtype=np.complex128)
     chi_matrho0_y = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
-        eps_i = parities[i]
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
         chi_jrho0_x[i] = chi_UV(tok_tilde_x, rho_i, pi_mn, pi_nm)
         chi_rhoj0_x[i] = chi_UV(rho_i, tok_tilde_x, pi_mn, pi_nm)
@@ -1061,7 +1055,7 @@ def compute_single_om_fused(
 def compute_chi(
     omegas,
     Gamma, mu_, invt, nodes, weights,
-    thetas, parities, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
+    thetas, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
     energije,
     rho_tilde_factory,
     verbose=True,
@@ -1079,7 +1073,7 @@ def compute_chi(
         result = compute_single_om_fused(
             om,
             Gamma, mu_, invt, nodes, weights,
-            thetas, parities, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
+            thetas, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
             energije,
             rho_tilde_factory,
             rho_tilde_cache,   # <-- shared, persistent
@@ -1237,6 +1231,10 @@ def get_dc_coefficient(omegas, chi_imag, omega_cutoff=None):
 
     return alpha, beta
 
+def find_DC_limit(omega0, chi_imag):
+    left, right = find_flat_regime(omega0,chi_imag)
+    return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
+    
 # ====== response and susceptibility obtained from simulation of a pulse ======
 
 ''' Gaussian pulse modulated by a cosine (in practice, however, I choose Omega=0, i.e. the pulse is a Gaussian ''' 

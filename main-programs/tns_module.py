@@ -81,7 +81,7 @@ class TNS:
         self.interaction = tokovi.interaction(file=interaction_file)
         self.pos = tokovi.positions(self.a, self.b, self.b2)
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
-        self.interaction_exp, self.thetas, self.parities = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
+        self.interaction_exp, self.thetas = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
         self.velocities()
         
         self.phis = []
@@ -125,8 +125,8 @@ class TNS:
         self.velocity_y = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[1] + self.dfock_dk[1], self.vecs).real)
 
         # Kubo's velocities
-        self.tok_x1 = tokovi.operator_tilde(self.tok[0], self.vecs)
-        self.tok_y1 = tokovi.operator_tilde(self.tok[1], self.vecs)
+        self.current_x = tokovi.operator_tilde(self.tok[0], self.vecs)
+        self.current_y = tokovi.operator_tilde(self.tok[1], self.vecs)
 
         # non-local interaction current
         mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V)
@@ -158,9 +158,9 @@ class TNS:
         self.err = err
         self.n = n
 
-    def run_Tdependence(self, temperature_file, save_during=False, file_name=None):
+    def run_Tdependence(self, input_temperature, save_during=False, file_name=None):
         
-        with open(temperature_file, "r", encoding="utf-8") as f:
+        with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
 
         evaluate_transport_DC = params_all['evaluate_transport_DC']
@@ -171,7 +171,8 @@ class TNS:
             print('Will calculate Boltzmann and Kubo bubble DC coefficients.')
         if evaluate_vertex_DC == True:
             print('Will calculate Kubo bubble DC coefficients and vertex corrections.')
-
+        if evaluate_transport_DC == False and evaluate_vertex_DC == False:
+            print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).')
         Gammas = params_all['Gammas']
         params = params_all['params']
         Nomega = params['Nomega']
@@ -245,10 +246,10 @@ class TNS:
               'Finished calculation.', flush=True)
 
     def ls_kubo(self, epsilons, Gamma, mfd1):
-        phi_x = tokovi.phi_Kubo(self.tok_x1, self.tok_x1, epsilons, self.energije, Gamma, self.mu)
-        phi_y = tokovi.phi_Kubo(self.tok_y1, self.tok_y1, epsilons, self.energije, Gamma, self.mu)
-        phiQ_x = tokovi.phi_Kubo(self.mat_x, self.tok_x1, epsilons, self.energije, Gamma, self.mu)
-        phiQ_y = tokovi.phi_Kubo(self.mat_y, self.tok_y1, epsilons, self.energije, Gamma, self.mu)
+        phi_x = tokovi.phi_Kubo(self.current_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
+        phi_y = tokovi.phi_Kubo(self.current_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
+        phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
+        phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
 
         l11_x = np.pi * tokovi.integral_omega(phi_x * mfd1, epsilons)
         l12_x = np.pi * tokovi.integral_omega(epsilons * phi_x * mfd1, epsilons)
@@ -311,6 +312,7 @@ class TNS:
         self.L12qy.append(tokovi.to_scalar_if_single(l12qy))
 
     def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
+        self.velocities()
         Ngamma = len(Gammas)
 
         l11x_0 = np.zeros(Ngamma)
@@ -336,55 +338,43 @@ class TNS:
             invt = Gamma / self.Ts[-1]
 
             rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-            results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.parities, self.tok_x1, self.mat_x, self.tok_y1, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
+            results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
 
             Chi_jj0 = - results_x['chi_jj0'].imag
             dChi_jj  = - results_x['dchi_jj'].imag
             Chi_jj = Chi_jj0 + dChi_jj
-            left, right = tokovi.find_flat_regime(omega0, Chi_jj0)
-            l11x_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_jj)
-            l11x[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jj[left:right])[0]
+            l11x_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
+            l11x[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
             Chi_jEj0 = - results_x['chi_jEj0'].imag
             dChi_jEj = - results_x['dchi_jEj'].imag
             Chi_jEj = Chi_jEj0 + dChi_jEj
-            left, right = tokovi.find_flat_regime(omega0, Chi_jEj0)
-            l12x_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jEj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_jEj)
-            l12x[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jEj[left:right])[0]
+            l12x_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
+            l12x[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
 
             Chi_matj0 = - results_x['chi_matj0'].imag
             dChi_matj = - results_x['dchi_matj'].imag
             Chi_matj = Chi_matj0 + dChi_matj
-            left, right = tokovi.find_flat_regime(omega0, Chi_matj0)
-            l12qx_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_matj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_matj)
-            l12qx[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_matj[left:right])[0]
+            l12qx_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
+            l12qx[g] = tokovi.find_DC_limit(omega0, Chi_matj)
 
             Chi_jj0 = - results_y['chi_jj0'].imag
             dChi_jj  = - results_y['dchi_jj'].imag
             Chi_jj = Chi_jj0 + dChi_jj
-            left, right = tokovi.find_flat_regime(omega0, Chi_jj0)
-            l11y_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_jj)
-            l11y[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jj[left:right])[0]
+            l11y_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
+            l11y[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
             Chi_jEj0 = - results_y['chi_jEj0'].imag
             dChi_jEj = - results_y['dchi_jEj'].imag
             Chi_jEj = Chi_jEj0 + dChi_jEj
-            left, right = tokovi.find_flat_regime(omega0, Chi_jEj0)
-            l12y_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jEj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_jEj)
-            l12y[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_jEj[left:right])[0]
+            l12y_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
+            l12y[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
 
             Chi_matj0 = - results_y['chi_matj0'].imag
             dChi_matj = - results_y['dchi_matj'].imag
             Chi_matj = Chi_matj0 + dChi_matj
-            left, right = tokovi.find_flat_regime(omega0, Chi_matj0)
-            l12qy_0[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_matj0[left:right])[0]
-            left, right = tokovi.find_flat_regime(omega0, Chi_matj)
-            l12qy[g] = tokovi.get_dc_coefficient(omega0[left:right], Chi_matj[left:right])[0]
+            l12qy_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
+            l12qy[g] = tokovi.find_DC_limit(omega0, Chi_matj)
 
         self.L11x_0.append(tokovi.to_scalar_if_single(l11x_0))
         self.L12x_0.append(tokovi.to_scalar_if_single(l12x_0))
@@ -398,6 +388,36 @@ class TNS:
         self.L11y_corr.append(tokovi.to_scalar_if_single(l11y))
         self.L12y_corr.append(tokovi.to_scalar_if_single(l12y))
         self.L12qy_corr.append(tokovi.to_scalar_if_single(l12qy))
+
+    def optical_responses(self, input_optical):
+        with open(input_optical, "r", encoding="utf-8") as f:
+            params = json.load(f)
+        
+        omega0_low = params['omega0_low']
+        omega0_high = params['omega0_high']
+        omega0_len = params['omega0_len']
+        space = params['space']
+        if space == 'log':
+            omega0 = np.logspace(omega0_low, omega0_high, omega0_len)
+        if space == 'lin':
+            omega0 = np.linspace(omega0_low, omega0_high, omega0_len)
+
+        deg = params['deg']
+        nodes, weights = roots_legendre(deg)
+        n_workers = params['n_workers']
+        Gamma = params['Gamma']
+        eps = params['eps']
+
+        invt = Gamma / self.Ts[-1]
+        mu_ = self.mu / Gamma
+
+        rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
+
+        results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas,
+                                                  self.current_x, self.mat_x, self.current_y, self.mat_y,
+                                                  self.energije, rho_tilde_factory,
+                                                  n_workers=n_workers, eps=eps, )
+        return omega0, results_x, results_y
 
     def reset(self):
         self.rho = self.rho0
