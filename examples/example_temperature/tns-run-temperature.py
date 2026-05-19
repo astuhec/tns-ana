@@ -28,12 +28,12 @@ perturbation_file = DIR + 'main-programs/parameters-perturbation.txt'
     - input.json: general parameters
     - input_temperature.json: temperatures at which to evaluate transport, spectral width Gamma
     '''
-input_file = DIR + 'examples/input.json'
-temperature_file = DIR + 'examples/input_temperature.json'
+input_file = "/Users/anast/OneDrive/Namizje/tns-repo/tns-ana/examples/input.json"
+temperature_file = "/Users/anast/OneDrive/Namizje/tns-repo/tns-ana/examples/input_temperature.json"
 
 ''' Add path to output file
 results will be saved already during the run, in case the run is not completed '''
-file_output = DIR + 'examples/transport_DC_results.npz'
+file_output = "/Users/anast/OneDrive/Namizje/tns-repo/tns-ana/examples/transport_DC_results.npz"
 
 ####################################################################################################################
 
