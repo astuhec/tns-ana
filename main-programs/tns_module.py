@@ -19,6 +19,7 @@ class TNS:
             params = json.load(f)
 
         self.Ny, self.Nx = params["Ny"], params["Nx"]
+        print(f'Initialized lattice with Ny={self.Ny} and Nx={self.Nx} unit cells.', flush=True)
         self.Nk = self.Ny * self.Nx
         self.U = params["U"] # eV
         self.V = params["V"] # eV
@@ -61,7 +62,6 @@ class TNS:
         self.rho0 = self.rho
         self.mu0 = self.mu
 
-        print(self.n)
         phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
         self.phi = phi_full[0]
         print('-' * 80)
@@ -164,7 +164,13 @@ class TNS:
             params_all = json.load(f)
 
         evaluate_transport_DC = params_all['evaluate_transport_DC']
-        evaluate_vertex_DC = params_all['evaluate_vertex_DC'],
+        evaluate_vertex_DC = params_all['evaluate_vertex_DC']
+
+        print('Started to find temperature dependence of transport coefficients.', flush=True)
+        if evaluate_transport_DC == True:
+            print('Will calculate Boltzmann and Kubo bubble DC coefficients.')
+        if evaluate_vertex_DC == True:
+            print('Will calculate Kubo bubble DC coefficients and vertex corrections.')
 
         Gammas = params_all['Gammas']
         params = params_all['params']
@@ -235,6 +241,8 @@ class TNS:
                 if save_during:
                     results_intermediate = self.collect_results()
                     np.savez(f'{file_name}', **results_intermediate)
+        print('-' * 80 + '\n' + \
+              'Finished calculation.', flush=True)
 
     def ls_kubo(self, epsilons, Gamma, mfd1):
         phi_x = tokovi.phi_Kubo(self.tok_x1, self.tok_x1, epsilons, self.energije, Gamma, self.mu)
@@ -327,9 +335,8 @@ class TNS:
             mu_ = self.mu / Gamma
             invt = Gamma / self.Ts[-1]
 
-            rho_tilde_cache = {}
             rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-            results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.parities, self.tok_x1, self.mat_x, self.tok_y1, self.mat_y, self.energije, rho_tilde_factory, rho_tilde_cache, eps=eps, n_workers=n_workers, verbose=True)
+            results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.parities, self.tok_x1, self.mat_x, self.tok_y1, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
 
             Chi_jj0 = - results_x['chi_jj0'].imag
             dChi_jj  = - results_x['dchi_jj'].imag
