@@ -1232,7 +1232,7 @@ def get_dc_coefficient(omegas, chi_imag, omega_cutoff=None):
     return alpha, beta
 
 def find_DC_limit(omega0, chi_imag):
-    left, right = find_flat_regime(omega0,chi_imag)
+    left, right = find_flat_regime(omega0, chi_imag)
     return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
     
 # ====== response and susceptibility obtained from simulation of a pulse ======

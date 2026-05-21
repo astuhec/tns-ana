@@ -19,6 +19,7 @@ class TNS:
             params = json.load(f)
 
         self.Ny, self.Nx = params["Ny"], params["Nx"]
+        print(f'=' * 80 + '\n' + 'Started TNS calculation' + '\n' + f'=' * 80, flush=True)
         print(f'Initialized lattice with Ny={self.Ny} and Nx={self.Nx} unit cells.', flush=True)
         self.Nk = self.Ny * self.Nx
         self.U = params["U"] # eV
@@ -64,14 +65,14 @@ class TNS:
 
         phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
         self.phi = phi_full[0]
-        print('-' * 80)
+        print('-' * 80, flush=True)
         print(f'Found ground state.' + '\n' + 'Order parameter components are:' + '\n' + \
-              f'phi_15 = {np.round(phi_full[0], 5)}' + '\n' + \
-              f'phi_25 = {np.round(phi_full[1], 5)}' + '\n' + \
-              f'phi_36 = {np.round(phi_full[2], 5)}' + '\n' + \
-              f'phi_36 = {np.round(phi_full[3], 5)}' + '\n' + '-' * 80 + '\n'  + \
+              f'phi_15 = {np.round(phi_full[0], 8)}' + '\n' + \
+              f'phi_25 = {np.round(phi_full[1], 8)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[2], 8)}' + '\n' + \
+              f'phi_36 = {np.round(phi_full[3], 8)}' + '\n' + '-' * 80 + '\n'  + \
               f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
-              f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 80
+              f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 80, flush=True
             )
         
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
@@ -168,11 +169,11 @@ class TNS:
 
         print('Started to find temperature dependence of transport coefficients.', flush=True)
         if evaluate_transport_DC == True:
-            print('Will calculate Boltzmann and Kubo bubble DC coefficients.')
+            print('Will calculate Boltzmann and Kubo bubble DC coefficients.', flush=True)
         if evaluate_vertex_DC == True:
-            print('Will calculate Kubo bubble DC coefficients and vertex corrections.')
+            print('Will calculate Kubo bubble DC coefficients and vertex corrections.', flush=True)
         if evaluate_transport_DC == False and evaluate_vertex_DC == False:
-            print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).')
+            print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).', flush=True)
         Gammas = params_all['Gammas']
         params = params_all['params']
         Nomega = params['Nomega']
