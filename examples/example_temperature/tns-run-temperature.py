@@ -26,6 +26,7 @@ print('Running on computer: ' + DIR)
 sys.path.insert(0, DIR + 'main-programs/')
 import tns_module as module
 import tns_helpers as helpers
+import tns_tokovi as tokovi
 
 hopping_file = DIR + 'main-programs/parameters-kinetic.txt'
 interaction_file = DIR + 'main-programs/parameters-interaction.txt'
@@ -45,11 +46,43 @@ file_output = DIR + 'examples/example_temperature/transport_DC_results.npz'
 
 s = module.TNS(input_file, hopping_file, interaction_file, perturbation_file,
                rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None)
+print(s.mu)
 
-s.run_Tdependence(temperature_file, 
-                  save_during=True, file_name=file_output)
+thetas = s.thetas
+Nop = len(thetas)
+vecs = s.vecs
+energije = s.energije
+Ny = s.Ny
+Nx = s.Nx
+mu = s.mu
 
-results = s.collect_results()
-np.savez(file_output, results=results)
+rhos = tokovi.rho_operators(Nop, s.kymesh, s.kxmesh, s.interaction, s.a, s.b)
+
+T = 1/100
+
+rho_expectationvalues = np.zeros(Nop, dtype=np.complex128)
+fermi_dirac = 1 / (np.exp((energije - mu) / T) + 1)
+
+for i in range(Nop):
+    rho_tilde = tokovi.operator_tilde(rhos[i], vecs)
+    for m in range(Ny):
+        for n in range(s.Nx):
+            rho_expectationvalues[i] += np.sum(np.diag(rho_tilde[:,:,m,n]) * fermi_dirac[:,m,n])
+
+    print(i, rho_expectationvalues[i])
+
+np.save('./results/rho_expects.npy', rho_expectationvalues)
+'''np.save('../../compare-denis/example1/hk_ana.npy', s.hop)
+np.save('../../compare-denis/example1/rho_ana.npy', s.rho)
+np.save('../../compare-denis/example1/hartree_ana.npy', s.hartree)
+np.save('../../compare-denis/example1/fock_ana.npy', s.fock)
+np.save('../../compare-denis/example1/hartree_list.npy', s.hartree_list)
+np.save('../../compare-denis/example1/Kxmesh.npy', s.kxmesh)
+'''
+#s.run_Tdependence(temperature_file, 
+#                  save_during=True, file_name=file_output)
+
+#results = s.collect_results()
+#np.savez(file_output, results=results)
 
 ####################################################################################################################

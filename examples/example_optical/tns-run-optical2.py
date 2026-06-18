@@ -53,26 +53,25 @@ s.run_Tdependence(input_temperature)
 s.velocities()
 
 ## Loop over Gammas
-Gammas = [0.008, 0.01, 0.012]
+Gamma = 0.008
 
-for i, Gamma in enumerate(Gammas):
-    input_optical = {
-        "Gamma" : Gamma,
-        "deg" : 1000,
-        "n_workers" : 1,
-        "omega0_low" : 0.01,
-        "omega0_high" : 0.08,
-        "omega0_len" : 30,
-        "space" : "lin",
-        "eps" : 1e-5
-    }
+input_optical = {
+    "Gamma" : Gamma,
+    "deg" : 1000,
+    "n_workers" : 1,
+    "omega0_low" : 0.01,
+    "omega0_high" : 1.0,
+    "omega0_len" : 150,
+    "space" : "lin",
+    "eps" : 1e-5
+}
 
-    omega0, results_x, results_y = s.optical_responses(input_optical, json_file=False)
+omega0, results_x, results_y = s.optical_responses(input_optical, json_file=False)
 
-    Optics = {'omega0' : omega0, 'results_x' : results_x, 'results_y' : results_y}
-    np.savez(DIR + f'examples/example_optical/results/optics_Gamma{Gamma}_Nx{s.Nx}.npz', **Optics)
+Optics = {'omega0' : omega0, 'results_x' : results_x, 'results_y' : results_y}
+np.savez(DIR + f'examples/example_optical/results/optics2_Gamma{Gamma}_Nx{s.Nx}.npz', **Optics)
 
-plot_conductivity = False
+plot_conductivity = True
 
 a = 3.51 # A
 b = 15.79 # A
