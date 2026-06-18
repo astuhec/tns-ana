@@ -19,6 +19,9 @@ class TNS:
             params = json.load(f)
 
         self.Ny, self.Nx = params["Ny"], params["Nx"]
+
+        self.N_epsilon = params["N_epsilon"]
+        
         print(f'=' * 80 + '\n' + 'Started TNS calculation' + '\n' + f'=' * 80, flush=True)
         print(f'Initialized lattice with Ny={self.Ny} and Nx={self.Nx} unit cells.', flush=True)
         self.Nk = self.Ny * self.Nx
@@ -56,7 +59,7 @@ class TNS:
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
         if energije == None:
-            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-10, maxiter=5000, N_epsilon=5, hartree_list=self.hartree_list)
+            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
         else:
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
         self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
@@ -390,10 +393,12 @@ class TNS:
         self.L12y_corr.append(tokovi.to_scalar_if_single(l12y))
         self.L12qy_corr.append(tokovi.to_scalar_if_single(l12qy))
 
-    def optical_responses(self, input_optical):
-        with open(input_optical, "r", encoding="utf-8") as f:
-            params = json.load(f)
-        
+    def optical_responses(self, input_optical, json_file=True):
+        if json_file:
+            with open(input_optical, "r", encoding="utf-8") as f:
+                params = json.load(f)
+        else:
+            params = input_optical
         omega0_low = params['omega0_low']
         omega0_high = params['omega0_high']
         omega0_len = params['omega0_len']
