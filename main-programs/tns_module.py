@@ -423,7 +423,7 @@ class TNS:
                                                   self.current_x, self.mat_x, self.current_y, self.mat_y,
                                                   self.energije, rho_tilde_factory,
                                                   n_workers=n_workers, eps=eps, )
-        return omega0, results_x, results_y
+        return omega0, results_x, results_y, results_xy, results_yx
 
     def reset(self):
         self.rho = self.rho0
