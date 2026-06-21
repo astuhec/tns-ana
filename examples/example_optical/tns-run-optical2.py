@@ -14,10 +14,10 @@ import matplotlib.pyplot as plt
 ####################################################################################################################
 
 ''' Add path to programs and parameters '''
-computer = 'ana' # if on mac, else 'anast' if on lenovo
+computer = 'anast' # if on mac, else 'anast' if on lenovo
 
 if computer == 'anast':
-    DIR = '/Users/anast/OneDrive/Namizje/tns-repo/tns-ana/'
+    DIR = '/Users/anast/OneDrive/Namizje/tns-ana/'
 elif computer == 'ana':
     DIR = '/Users/ana/Desktop/tns-ana/'
 
@@ -66,10 +66,10 @@ input_optical = {
     "eps" : 1e-5
 }
 
-omega0, results_x, results_y = s.optical_responses(input_optical, json_file=False)
+omega0, results_x, results_y, results_xy, results_yx = s.optical_responses(input_optical, json_file=False)
 
 Optics = {'omega0' : omega0, 'results_x' : results_x, 'results_y' : results_y}
-np.savez(DIR + f'examples/example_optical/results/optics2_Gamma{Gamma}_Nx{s.Nx}.npz', **Optics)
+#np.savez(DIR + f'examples/example_optical/results/optics2_Gamma{Gamma}_Nx{s.Nx}.npz', **Optics)
 
 plot_conductivity = True
 
@@ -85,15 +85,15 @@ if plot_conductivity:
     fig, ax = plt.subplots(ncols=2, figsize=(8,4))
 
     # direction x (axis a)
-    sigma_x = -results_x['chi_jj0'].imag / omega0 * prefactor
-    dsigma_x = -results_x['dchi_jj'].imag / omega0 * prefactor
+    sigma_x = -results_xy['chi_jj0'].imag / omega0 * prefactor
+    dsigma_x = -results_xy['dchi_jj'].imag / omega0 * prefactor
     ax[0].plot(omega0, sigma_x, label='without vertex corrections')
     ax[0].plot(omega0, sigma_x + dsigma_x, label='with vertex corrections')
     ax[0].set_xlabel(r'$\omega\,(\text{eV})$')
 
     # direction y (axis b)
-    sigma_y = -results_y['chi_jj0'].imag / omega0 * prefactor
-    dsigma_y = -results_y['dchi_jj'].imag / omega0 * prefactor
+    sigma_y = -results_yx['chi_jj0'].imag / omega0 * prefactor
+    dsigma_y = -results_yx['dchi_jj'].imag / omega0 * prefactor
     ax[1].plot(omega0, sigma_y, label='without vertex corrections')
     ax[1].plot(omega0, sigma_y + dsigma_y, label='with vertex corrections')
     ax[1].set_xlabel(r'$\omega\,(\text{eV})$')

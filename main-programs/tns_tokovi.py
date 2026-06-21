@@ -1018,6 +1018,9 @@ def compute_single_om_fused(
     chi_jEj0_y = chi_UV(tok_tilde_y, tok_tilde_y, piw_mn, piw_nm)
     chi_matj0_y = chi_UV(mat_tilde_y, tok_tilde_y, pi_mn, pi_nm)
 
+    chi_jj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, pi_mn, pi_nm)
+    chi_jj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, pi_mn, pi_nm)
+
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
     chi_jrho0_x = np.zeros(Nop, dtype=np.complex128)
     chi_rhoj0_x = np.zeros(Nop, dtype=np.complex128)
@@ -1046,11 +1049,15 @@ def compute_single_om_fused(
     dchi_jj_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_jEj_x = chi_jErho0_x @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_matj_x = chi_matrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
+    
     dchi_jj_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jEj_y = chi_jErho0_y @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_matj_y = chi_matrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
 
-    return om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y
+    dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
+    dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
+
+    return om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y, chi_jj0_xy, dchi_jj_xy, chi_jj0_yx, dchi_jj_yx
 
 def compute_chi(
     omegas,
@@ -1084,18 +1091,25 @@ def compute_chi(
 
     chi0_arr      = np.zeros((N_om, Nop, Nop), dtype=np.complex128)
     chi_rpa_arr   = np.zeros((N_om, Nop, Nop), dtype=np.complex128)
+
     chi_jj0_arr_x   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr_x   = np.zeros(N_om,             dtype=np.complex128)
     chi_matj0_arr_x = np.zeros(N_om, dtype=np.complex128)
     chi_jEj0_arr_x = np.zeros(N_om, dtype=np.complex128)
     dchi_matj_arr_x = np.zeros(N_om, dtype=np.complex128)
     dchi_jEj_arr_x = np.zeros(N_om, dtype=np.complex128)
+    
     chi_jj0_arr_y   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr_y   = np.zeros(N_om,             dtype=np.complex128)
     chi_matj0_arr_y = np.zeros(N_om, dtype=np.complex128)
     chi_jEj0_arr_y = np.zeros(N_om, dtype=np.complex128)
     dchi_matj_arr_y = np.zeros(N_om, dtype=np.complex128)
     dchi_jEj_arr_y = np.zeros(N_om, dtype=np.complex128)
+
+    chi_jj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
+    dchi_jj_arr_xy = np.zeros(N_om, dtype=np.complex128)
+    chi_jj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    dchi_jj_arr_yx = np.zeros(N_om, dtype=np.complex128)
 
     t_total = time.time()
 
@@ -1108,16 +1122,18 @@ def compute_chi(
         with tqdm(total=N_om, desc="Progress:", disable=not verbose) as pbar:
             for future in as_completed(futures):
                 om_idx, result = future.result()
-                om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y = result
+                om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y, chi_jj0_xy, dchi_jj_xy, chi_jj0_yx, dchi_jj_yx = result
 
                 chi0_arr[om_idx]      = chi0
                 chi_rpa_arr[om_idx]   = chi_rpa
+
                 chi_jj0_arr_x[om_idx]   = chi_jj0_x
                 dchi_jj_arr_x[om_idx]   = dchi_jj_x
                 chi_jEj0_arr_x[om_idx] = chi_jEj0_x
                 dchi_jEj_arr_x[om_idx] = dchi_jEj_x
                 chi_matj0_arr_x[om_idx] = chi_matj0_x
                 dchi_matj_arr_x[om_idx] = dchi_matj_x
+                
                 chi_jj0_arr_y[om_idx]   = chi_jj0_y
                 dchi_jj_arr_y[om_idx]   = dchi_jj_y
                 chi_jEj0_arr_y[om_idx] = chi_jEj0_y
@@ -1125,6 +1141,11 @@ def compute_chi(
                 chi_matj0_arr_y[om_idx] = chi_matj0_y
                 dchi_matj_arr_y[om_idx] = dchi_matj_y
                 
+                chi_jj0_arr_xy[om_idx] = chi_jj0_xy
+                dchi_jj_arr_xy[om_idx] = dchi_jj_xy
+                chi_jj0_arr_yx[om_idx] = chi_jj0_yx
+                dchi_jj_arr_yx[om_idx] = dchi_jj_yx
+
                 pbar.update(1)
 
     results_x = {'chi0' : chi0_arr,
@@ -1151,7 +1172,12 @@ def compute_chi(
                'dchi_matj' : dchi_matj_arr_y,
                'dchi_jEj' : dchi_jEj_arr_y}
     
-    return results_x, results_y
+    results_xy = {'chi_jj0' : chi_jj0_arr_xy,
+                  'dchi_jj' : dchi_jj_arr_xy}
+
+    results_yx = {'chi_jj0' : chi_jj0_arr_yx,
+                  'dchi_jj' : dchi_jj_arr_yx}
+    return results_x, results_y, results_xy, results_yx
 
 ''' operator in band basis obtained from operator in orbital basis '''
 def operator_tilde(op_bare, vecs):
