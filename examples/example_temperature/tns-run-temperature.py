@@ -48,7 +48,7 @@ s = module.TNS(input_file, hopping_file, interaction_file, perturbation_file,
                rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None)
 print(s.mu)
 
-thetas = s.thetas
+'''thetas = s.thetas
 Nop = len(thetas)
 vecs = s.vecs
 energije = s.energije
@@ -58,9 +58,9 @@ mu = s.mu
 
 rhos = tokovi.rho_operators(Nop, s.kymesh, s.kxmesh, s.interaction, s.a, s.b)
 
-T = 1/100
+T = 1/100'''
 
-rho_expectationvalues = np.zeros(Nop, dtype=np.complex128)
+'''rho_expectationvalues = np.zeros(Nop, dtype=np.complex128)
 fermi_dirac = 1 / (np.exp((energije - mu) / T) + 1)
 
 for i in range(Nop):
@@ -71,7 +71,7 @@ for i in range(Nop):
 
     print(i, rho_expectationvalues[i])
 
-np.save('./results/rho_expects.npy', rho_expectationvalues)
+np.save('./results/rho_expects.npy', rho_expectationvalues)'''
 '''np.save('../../compare-denis/example1/hk_ana.npy', s.hop)
 np.save('../../compare-denis/example1/rho_ana.npy', s.rho)
 np.save('../../compare-denis/example1/hartree_ana.npy', s.hartree)

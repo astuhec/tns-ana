@@ -61,17 +61,17 @@ input_optical = {
     "n_workers" : 1,
     "omega0_low" : 0.01,
     "omega0_high" : 1.0,
-    "omega0_len" : 150,
+    "omega0_len" : 100,
     "space" : "lin",
     "eps" : 1e-5
 }
 
-omega0, results_x, results_y = s.optical_responses(input_optical, json_file=False)
+omega0, results_x, results_y, results_xy, results_yx = s.optical_responses(input_optical, json_file=False)
 
 Optics = {'omega0' : omega0, 'results_x' : results_x, 'results_y' : results_y}
 np.savez(DIR + f'examples/example_optical/results/optics2_Gamma{Gamma}_Nx{s.Nx}.npz', **Optics)
 
-plot_conductivity = True
+plot_conductivity = False
 
 a = 3.51 # A
 b = 15.79 # A
@@ -80,6 +80,18 @@ V0 = a * b * c
 G0 = 25.8 * 1e3 # 1/Ohm
 
 prefactor = 4 * np.pi * 1e10 / V0 / G0 # prefactor to get conductivity into right units, i.e. 1/Ohm m
+
+sigma_xy = -results_xy['chi_jj0'].imag / omega0
+dsigma_xy = -results_xy['dchi_jj'].imag / omega0
+
+sigma_yx = -results_yx['chi_jj0'].imag / omega0
+dsigma_yx = -results_yx['dchi_jj'].imag / omega0
+
+plt.plot(omega0, sigma_xy.real)
+plt.plot(omega0, sigma_xy.real + dsigma_xy.real)
+#plt.plot(omega0, sigma_yx.real)
+#plt.plot(omega0, sigma_yx.real + dsigma_yx.real)
+plt.show()
 
 if plot_conductivity:
     fig, ax = plt.subplots(ncols=2, figsize=(8,4))

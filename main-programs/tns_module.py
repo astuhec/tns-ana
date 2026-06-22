@@ -342,7 +342,7 @@ class TNS:
             invt = Gamma / self.Ts[-1]
 
             rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-            results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
+            results_x, results_y, _, _ = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
 
             Chi_jj0 = - results_x['chi_jj0'].imag
             dChi_jj  = - results_x['dchi_jj'].imag
@@ -419,11 +419,11 @@ class TNS:
 
         rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
-        results_x, results_y = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas,
+        results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas,
                                                   self.current_x, self.mat_x, self.current_y, self.mat_y,
                                                   self.energije, rho_tilde_factory,
                                                   n_workers=n_workers, eps=eps, )
-        return omega0, results_x, results_y
+        return omega0, results_x, results_y, results_xy, results_yx
 
     def reset(self):
         self.rho = self.rho0
