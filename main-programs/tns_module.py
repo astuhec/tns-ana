@@ -12,7 +12,7 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None):
+                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -26,7 +26,7 @@ class TNS:
         print(f'Initialized lattice with Ny={self.Ny} and Nx={self.Nx} unit cells.', flush=True)
         self.Nk = self.Ny * self.Nx
         self.U = params["U"] # eV
-        self.V = params["V"] # eV
+        self.V = params["V"] if V==None else V# eV
         self.a = params["a"] # A
         self.b = params["b"] # A
         self.b2 = params["b2"] # A
@@ -39,7 +39,7 @@ class TNS:
         eps0 = params["eps0"]
 
         self.n_target = params["n_target"]
-        self.faktor = params["faktor"]
+        self.faktor = params["faktor"] if faktor==None else faktor
 
         Ky = 2*np.pi/self.b * np.arange(-self.Ny//2, self.Ny//2) / self.Ny
         Kx = 2*np.pi/self.a * np.arange(-self.Nx//2, self.Nx//2) / self.Nx 
@@ -83,7 +83,13 @@ class TNS:
         self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction(file=interaction_file)
-        self.pos = tokovi.positions(self.a, self.b, self.b2) if pos==None else pos
+        if pos==None:
+            self.pos = tokovi.positions(self.a, self.b, self.b2)
+        elif pos==0:
+            pos = []
+            for i in range(7):
+                pos.append([0.0,0.0])
+            self.pos = np.array(pos)
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.interaction_exp, self.thetas = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
         self.velocities()

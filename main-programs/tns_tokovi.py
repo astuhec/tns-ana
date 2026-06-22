@@ -1018,10 +1018,6 @@ def compute_single_om_fused(
     chi_jEj0_y = chi_UV(tok_tilde_y, tok_tilde_y, piw_mn, piw_nm)
     chi_matj0_y = chi_UV(mat_tilde_y, tok_tilde_y, pi_mn, pi_nm)
 
-<<<<<<< HEAD
-    # mixed conductivity xy,yx
-=======
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
     chi_jj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, pi_mn, pi_nm)
     chi_jj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, pi_mn, pi_nm)
 
@@ -1053,19 +1049,10 @@ def compute_single_om_fused(
     dchi_jj_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_jEj_x = chi_jErho0_x @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_matj_x = chi_matrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
     dchi_jj_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jEj_y = chi_jErho0_y @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_matj_y = chi_matrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
 
-<<<<<<< HEAD
-    # mixed conductivity xy,yx
-=======
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
     dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
 
@@ -1118,11 +1105,7 @@ def compute_chi(
     dchi_matj_arr_y = np.zeros(N_om, dtype=np.complex128)
     dchi_jEj_arr_y = np.zeros(N_om, dtype=np.complex128)
 
-<<<<<<< HEAD
-    chi_jj0_arr_xy = np.zeros(N_om, dtype=np.complex128)
-=======
     chi_jj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
     dchi_jj_arr_xy = np.zeros(N_om, dtype=np.complex128)
     chi_jj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
     dchi_jj_arr_yx = np.zeros(N_om, dtype=np.complex128)
@@ -1149,11 +1132,7 @@ def compute_chi(
                 dchi_jEj_arr_x[om_idx] = dchi_jEj_x
                 chi_matj0_arr_x[om_idx] = chi_matj0_x
                 dchi_matj_arr_x[om_idx] = dchi_matj_x
-<<<<<<< HEAD
-
-=======
                 
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
                 chi_jj0_arr_y[om_idx]   = chi_jj0_y
                 dchi_jj_arr_y[om_idx]   = dchi_jj_y
                 chi_jEj0_arr_y[om_idx] = chi_jEj0_y
@@ -1199,16 +1178,9 @@ def compute_chi(
     
     results_xy = {'chi_jj0' : chi_jj0_arr_xy,
                   'dchi_jj' : dchi_jj_arr_xy}
-<<<<<<< HEAD
-    
-    results_yx = {'chi_jj0' : chi_jj0_arr_yx,
-                  'dchi_jj' : dchi_jj_arr_yx}
-    
-=======
 
     results_yx = {'chi_jj0' : chi_jj0_arr_yx,
                   'dchi_jj' : dchi_jj_arr_yx}
->>>>>>> c094075cab505b96b37f7819143bb95ece2f8203
     return results_x, results_y, results_xy, results_yx
 
 ''' operator in band basis obtained from operator in orbital basis '''
