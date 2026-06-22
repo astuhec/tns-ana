@@ -53,7 +53,7 @@ def positions(a, b, b2):
 #ycor_[0]=13.86/c_;ycor_[1]=9.807/c_;ycor_[2]=5.982/c_;ycor_[3]=1.927/c_;ycor_[4]=11.92/c_;ycor_[5]=3.94/c_
 
 ''' matrix for number density operator '''
-def j_tok(Kymesh, Kxmesh, a, b, b2, file):
+def j_tok(Kymesh, Kxmesh, a, b, b2, file, faktor=1.0):
     pos = positions(a, b, b2)
     Ny, Nx = Kymesh.shape
     jx = np.zeros((6, 6, Ny, Nx), dtype=np.complex128)
@@ -62,6 +62,7 @@ def j_tok(Kymesh, Kxmesh, a, b, b2, file):
     for line in file:
         x, y, orb1, orb2, t = line
         x, y, orb1, orb2, t = float(x), float(y), int(orb1), int(orb2), float(t)
+        if orb1 != orb2: t = faktor * t
         if orb1 == orb2 and (x,y) == (0,0): pass # this is onsite energy, does not contribute to j
         else:
             osnova = 1j * t * np.exp(-1j * (Kxmesh * x * a + Kymesh * y * b))

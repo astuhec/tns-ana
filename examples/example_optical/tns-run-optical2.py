@@ -43,6 +43,7 @@ file_output = DIR + 'examples/example_optical/optical_results.npz'
 
 ####################################################################################################################
 ## Find equilibrium state at desired temperature T.
+
 s = module.TNS(input_file, hopping_file, interaction_file, perturbation_file,
                rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None)
 
@@ -60,8 +61,8 @@ input_optical = {
     "deg" : 1000,
     "n_workers" : 1,
     "omega0_low" : 0.01,
-    "omega0_high" : 1.0,
-    "omega0_len" : 150,
+    "omega0_high" : 2.0,
+    "omega0_len" : 100,
     "space" : "lin",
     "eps" : 1e-5
 }
@@ -85,15 +86,15 @@ if plot_conductivity:
     fig, ax = plt.subplots(ncols=2, figsize=(8,4))
 
     # direction x (axis a)
-    sigma_x = -results_xy['chi_jj0'].imag / omega0 * prefactor
-    dsigma_x = -results_xy['dchi_jj'].imag / omega0 * prefactor
+    sigma_x = -results_x['chi_jj0'].imag / omega0 * prefactor
+    dsigma_x = -results_x['dchi_jj'].imag / omega0 * prefactor
     ax[0].plot(omega0, sigma_x, label='without vertex corrections')
     ax[0].plot(omega0, sigma_x + dsigma_x, label='with vertex corrections')
     ax[0].set_xlabel(r'$\omega\,(\text{eV})$')
 
     # direction y (axis b)
-    sigma_y = -results_yx['chi_jj0'].imag / omega0 * prefactor
-    dsigma_y = -results_yx['dchi_jj'].imag / omega0 * prefactor
+    sigma_y = -results_y['chi_jj0'].imag / omega0 * prefactor
+    dsigma_y = -results_y['dchi_jj'].imag / omega0 * prefactor
     ax[1].plot(omega0, sigma_y, label='without vertex corrections')
     ax[1].plot(omega0, sigma_y + dsigma_y, label='with vertex corrections')
     ax[1].set_xlabel(r'$\omega\,(\text{eV})$')

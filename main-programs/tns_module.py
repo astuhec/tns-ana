@@ -80,10 +80,16 @@ class TNS:
         
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
         self.kinetic = tokovi.kinetic(faktor=self.faktor, file=hopping_file)
-        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
+        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic, faktor=self.faktor)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction(file=interaction_file)
-        self.pos = tokovi.positions(self.a, self.b, self.b2) if pos==None else pos
+        if pos==None:
+            self.pos = tokovi.positions(self.a, self.b, self.b2)
+        else:
+            pos = []
+            for i in range(7):
+                pos.append([0.0,0.0])
+            self.pos = np.array(pos)
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.interaction_exp, self.thetas = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
         self.velocities()
