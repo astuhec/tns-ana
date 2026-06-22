@@ -12,7 +12,7 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None):
+                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -83,7 +83,7 @@ class TNS:
         self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction(file=interaction_file)
-        self.pos = tokovi.positions(self.a, self.b, self.b2)
+        self.pos = tokovi.positions(self.a, self.b, self.b2) if pos==None else pos
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.interaction_exp, self.thetas = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
         self.velocities()
