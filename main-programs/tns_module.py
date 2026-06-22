@@ -80,12 +80,16 @@ class TNS:
         
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
         self.kinetic = tokovi.kinetic(faktor=self.faktor, file=hopping_file)
-        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic)
+        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic, faktor=self.faktor)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction(file=interaction_file)
         if pos==None:
             self.pos = tokovi.positions(self.a, self.b, self.b2)
+<<<<<<< HEAD
         elif pos==0:
+=======
+        else:
+>>>>>>> origin/lenovo-branch
             pos = []
             for i in range(7):
                 pos.append([0.0,0.0])

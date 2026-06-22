@@ -15,10 +15,10 @@ import matplotlib.pyplot as plt
 ####################################################################################################################
 
 ''' Add path to programs and parameters '''
-computer = 'ana' # if on mac, else 'anast' if on lenovo
+computer = 'anast' # if on mac, else 'anast' if on lenovo
 
 if computer == 'anast':
-    DIR = '/Users/anast/OneDrive/Namizje/tns-repo/tns-ana/'
+    DIR = '/Users/anast/OneDrive/Namizje/tns-ana/'
 elif computer == 'ana':
     DIR = '/Users/ana/Desktop/tns-ana/'
 
@@ -46,6 +46,12 @@ file_output = DIR + 'examples/example_temperature/transport_DC_results.npz'
 
 s = module.TNS(input_file, hopping_file, interaction_file, perturbation_file,
                rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None)
+
+np.save('vecs.npy', s.vecs)
+np.save('kymesh.npy', s.kymesh)
+np.save('kxmesh.npy', s.kxmesh)
+np.save('kxmesh.npy', s.energije)
+
 print(s.mu)
 
 '''thetas = s.thetas
