@@ -7,9 +7,9 @@ def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0)
     c2=np.array(matplotlib.colors.to_rgb(c2))
     return matplotlib.colors.to_hex((1-mix)*c1 + mix*c2)
 
-def band_structure(energije, barve, name='bands', a=3.51, b=15.79, col1='firebrick', col2='blue'):
+def bands(energije, barve, mu, name='bands', a=3.51, b=15.79, col1='firebrick', col2='blue'):
     fig, ax = plt.subplots(figsize=(8,4), facecolor='white')
-    mu = 0.5 * (np.min(energije[2]) + np.max(energije[1]))
+    #mu = 0.5 * (np.min(energije[2]) + np.max(energije[1]))
     Ny, Nx = energije.shape[-2:]
     kX = 2*np.pi / a
     kY = 2*np.pi / b
