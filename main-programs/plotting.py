@@ -34,7 +34,6 @@ def bands(energije, barve, mu, name='bands', a=3.51, b=15.79, col1='firebrick', 
 
     # Z - Gamma
     E_c, E_v = np.max(energije[:Ny//2, Nx//2]), np.min(energije[:Ny//2, Nx//2])
-    gap = E_c - E_v
     for i in range(6):
         K = (Nx//2-1)*kX + np.arange(Ny//2)*kY
         E = energije[i, :Ny//2, Nx//2]
@@ -51,7 +50,6 @@ def bands(energije, barve, mu, name='bands', a=3.51, b=15.79, col1='firebrick', 
         E = energije[i, 0, Nx//2:][::-1]
         for g in range(len(K)-1):
             shade = np.mean(barve[i, 0, Nx//2:][::-1][g:g+2])
-            print(shade)
             if shade > 1.0:
                 shade = 1.0
             plt.plot(K[g:g+2], E[g:g+2] - mu, color=colorFader(col1, col2, shade))
@@ -103,4 +101,5 @@ def optics(omega0, results_x, results_y, results_xy, results_yx, name='optics'):
             ax[j,i].legend()
 
     plt.tight_layout()
+    plt.show()
     plt.savefig(f'{name}.pdf')
