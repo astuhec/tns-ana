@@ -68,12 +68,19 @@ class TNS:
 
         phi_full = helpers.Phi(self.kxmesh, self.rho, self.a).real
         self.phi = phi_full[0]
+        pos12 = np.array([0.,self.a])
+        pos34 = np.array([0.,-self.a])
         print('-' * 80, flush=True)
         print(f'Found ground state.' + '\n' + 'Order parameter components are:' + '\n' + \
               f'phi_15 = {np.round(phi_full[0], 8)}' + '\n' + \
               f'phi_25 = {np.round(phi_full[1], 8)}' + '\n' + \
               f'phi_36 = {np.round(phi_full[2], 8)}' + '\n' + \
-              f'phi_36 = {np.round(phi_full[3], 8)}' + '\n' + '-' * 80 + '\n'  + \
+              f'phi_36 = {np.round(phi_full[3], 8)}' + '\n' + '-' * 80, flush=True)
+        print('Delta components are:' + '\n' + 
+              f'Deltas_15: {helpers.Delta_full(self.kxmesh, self.Nk, self.rho, 0, 4, pos12).real}' + '\n' + 
+              f'Deltas_25: {helpers.Delta_full(self.kxmesh, self.Nk, self.rho, 1, 4, pos12).real}' + '\n' + 
+              f'Deltas_36: {helpers.Delta_full(self.kxmesh, self.Nk, self.rho, 2, 5, pos34).real}' + '\n' + 
+              f'Deltas_46: {helpers.Delta_full(self.kxmesh, self.Nk, self.rho, 3, 5, pos34).real}' + '\n'  + '-' * 80 + '\n' + 
               f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
               f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 80, flush=True
             )
