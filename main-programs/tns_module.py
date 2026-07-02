@@ -58,7 +58,7 @@ class TNS:
 
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
-        if energije == None:
+        if mu==None:
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
             self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
         else:
