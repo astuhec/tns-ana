@@ -4,7 +4,7 @@ import sys
 from scipy.special import roots_legendre
 import json
 
-sys.path.append("/Users/ana/Desktop/tns-ana/main-programs/") 
+sys.path.append("/home/stuhecana/tns-ana/main-programs/") 
 
 import tns_helpers as helpers
 import tns_tokovi as tokovi
@@ -12,7 +12,7 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None):
+                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -60,9 +60,10 @@ class TNS:
             else: use the provided gorund state'''
         if energije == None:
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
+            self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
         else:
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
-        self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+            self.mu = mu
         self.rho0 = self.rho
         self.mu0 = self.mu
 

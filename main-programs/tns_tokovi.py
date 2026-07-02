@@ -12,7 +12,6 @@ from tqdm import tqdm
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
-#os.chdir("/Users/ana/Desktop/tns-ana/main-programs/")
 
 import tns_helpers as helpers
 
