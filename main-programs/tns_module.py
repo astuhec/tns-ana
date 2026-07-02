@@ -176,7 +176,7 @@ class TNS:
         self.err = err
         self.n = n
 
-    def run_Tdependence(self, input_temperature, save_during=False, file_name=None):
+    def run_Tdependence(self, input_temperature, save_during=False, file_name=None, own_beta=None, betas_own=None, stops_own=None):
         
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
@@ -207,9 +207,14 @@ class TNS:
         scale = params_all['scale']
         Nbetas = params_all['Nbetas']
         freq_betas = params_all['freq_betas']
-        betas = betas0 / scale**np.arange(1, Nbetas+1)
-        max_stop = int(Nbetas // freq_betas)
-        stops = [freq_betas*i for i in range(1, max_stop+1)]
+
+        if own_beta==None:
+            betas = betas0 / scale**np.arange(1, Nbetas+1)
+            max_stop = int(Nbetas // freq_betas)
+            stops = [freq_betas*i for i in range(1, max_stop+1)]
+        else:
+            betas = betas_own
+            stops = stops_own
 
         if evaluate_vertex_DC:
             nodes, weights = roots_legendre(deg)
