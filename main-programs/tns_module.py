@@ -93,7 +93,7 @@ class TNS:
         self.interaction = tokovi.interaction(file=interaction_file)
         if pos==None:
             self.pos = tokovi.positions(self.a, self.b, self.b2)
-        else:
+        elif pos==0:
             pos = []
             for i in range(7):
                 pos.append([0.0,0.0])
