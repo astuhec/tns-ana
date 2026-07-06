@@ -237,7 +237,7 @@ def NewMu(n_target, Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu, dm
         mu_mid = (mus[0] + mus[1])/2
         if enough == True:
             break   
-        n_mid = Rho_next(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu_mid, maxiter, mix, eps_last)[-1]
+        n_mid = Rho_next(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu_mid, maxiter, mix, eps_last, hartree_list=hartree_list)[-1]
         if n_mid > n_target: mus[1] = mu_mid
         elif n_mid < n_target: mus[0] = mu_mid
         if np.abs(n_mid - n_target) < n_pass:
