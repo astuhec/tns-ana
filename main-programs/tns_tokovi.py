@@ -18,6 +18,11 @@ import tns_helpers as helpers
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
 
+def hermitize_operator(operator):
+    """Return 0.5 * (A + A^dagger) over the two orbital axes."""
+    operator = np.asarray(operator, dtype=np.complex128)
+    return 0.5 * (operator + np.swapaxes(operator.conj(), -4, -3))
+
 def kinetic(file="parametri-kinetic.txt", extend=None, faktor=1.0):
     seznam = []
     with open(file, 'r') as f:
@@ -52,7 +57,7 @@ def positions(a, b, b2):
 #ycor_[0]=13.86/c_;ycor_[1]=9.807/c_;ycor_[2]=5.982/c_;ycor_[3]=1.927/c_;ycor_[4]=11.92/c_;ycor_[5]=3.94/c_
 
 ''' matrix for number density operator '''
-def j_tok(Kymesh, Kxmesh, a, b, b2, file, faktor=1.0, pos=None):
+def j_tok(Kymesh, Kxmesh, a, b, b2, file, pos=None):
     
     if pos == None:
         pos = positions(a, b, b2)
@@ -69,7 +74,6 @@ def j_tok(Kymesh, Kxmesh, a, b, b2, file, faktor=1.0, pos=None):
     for line in file:
         x, y, orb1, orb2, t = line
         x, y, orb1, orb2, t = float(x), float(y), int(orb1), int(orb2), float(t)
-        if orb1 != orb2: t = faktor * t
         if orb1 == orb2 and (x,y) == (0,0): pass # this is onsite energy, does not contribute to j
         else:
             osnova = 1j * t * np.exp(-1j * (Kxmesh * x * a + Kymesh * y * b))
@@ -86,7 +90,7 @@ def j_tok(Kymesh, Kxmesh, a, b, b2, file, faktor=1.0, pos=None):
     jmatrix = np.zeros((2,6,6,Ny,Nx), dtype=np.complex128)
     jmatrix[0] = jx
     jmatrix[1] = jy
-    return jmatrix
+    return hermitize_operator(jmatrix)
 
 ''' def j_Fock(rho, Kymesh, Kxmesh, a, b, b2, V):
     pos = positions(a, b, b2)
@@ -129,7 +133,7 @@ def velocity_HF(Kymesh, Kxmesh, a, b, file):
         if orb1 != orb2:
             dH_dk[0, orb2 - 1, orb1 - 1] += position_x * ad.conjugate()
             dH_dk[1, orb2 - 1, orb1 - 1] += position_y * ad.conjugate()
-    return dH_dk
+    return hermitize_operator(dH_dk)
 
 def fock_sum(rho_r, Kxmesh, delta_x):
     fock = np.sum(rho_r * np.exp(-1j * Kxmesh * delta_x)).real
@@ -155,7 +159,7 @@ def velocity_fock_HF(rho, Kymesh, Kxmesh, a, V):
     fock_velocity[2,5] = fock_velocity[5,2].conjugate()
     fock_velocity[3,5] = fock_velocity[5,3].conjugate()
 
-    return fock_velocity
+    return hermitize_operator(fock_velocity)
 
 @njit
 def expit_stable(x):
@@ -360,10 +364,10 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V):
     Ny, Nx = Kymesh.shape
     Nk = Ny * Nx
 
-    M3  = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex64)
-    M6  = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex64)
-    M4a = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex64)
-    M4b = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex64)
+    M3  = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
+    M6  = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
+    M4a = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
+    M4b = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
 
     ns = np.array([np.sum(rho[i, i]).real for i in range(6)])
 
@@ -453,10 +457,10 @@ def compute_all_mf_matrices_old(Kymesh, rho, geom, phases, g_ffts, a, b, U, V):
     Ny, Nx = Kymesh.shape
     Nk = Ny * Nx
 
-    M3 = np.zeros((2,6,6,Ny,Nx), dtype=np.complex64)
-    M6 = np.zeros((2,6,6,Ny,Nx), dtype=np.complex64)
-    M4a = np.zeros((2,6,6,Ny,Nx), dtype=np.complex64)
-    M4b = np.zeros((2,6,6,Ny,Nx), dtype=np.complex64)
+    M3 = np.zeros((2,6,6,Ny,Nx), dtype=np.complex128)
+    M6 = np.zeros((2,6,6,Ny,Nx), dtype=np.complex128)
+    M4a = np.zeros((2,6,6,Ny,Nx), dtype=np.complex128)
+    M4b = np.zeros((2,6,6,Ny,Nx), dtype=np.complex128)
 
     ns = np.zeros(6)
     for i in range(6):
@@ -739,7 +743,7 @@ sigmas[3] = np.diag([1,-1])
 
 def rho_operators(Nop, Kymesh, Kxmesh, interaction, a, b):
     Ny, Nx = Kymesh.shape
-    rhos = np.zeros((Nop, 6, 6, Ny, Nx), dtype=np.complex64)
+    rhos = np.zeros((Nop, 6, 6, Ny, Nx), dtype=np.complex128)
     u = 0
     for l, (x, y, orb1, orb2) in enumerate(interaction):
         orb1, orb2 = int(orb1), int(orb2)
@@ -748,7 +752,7 @@ def rho_operators(Nop, Kymesh, Kxmesh, interaction, a, b):
             P[orb1-1,0] = 1
             P[orb2-1,1] = 1
             for nu in [0,1,2,3]:
-                U_kdelta = np.zeros((2, 2, Ny, Nx), dtype=np.complex64)
+                U_kdelta = np.zeros((2, 2, Ny, Nx), dtype=np.complex128)
                 factor = np.exp(-1j * (Kxmesh * x * a + Kymesh * y * b) / 2)
                 U_kdelta[0,0] = factor
                 U_kdelta[1,1] = factor.conj()
@@ -760,19 +764,19 @@ def rho_operators(Nop, Kymesh, Kxmesh, interaction, a, b):
             P[orb1-1,0] = 1
             P[orb2-1,1] = 1
             for nu in [0]:
-                U_kdelta = np.zeros((2, 2, Ny, Nx), dtype=np.complex64)
+                U_kdelta = np.zeros((2, 2, Ny, Nx), dtype=np.complex128)
                 factor = np.exp(-1j * (Kxmesh * x * a + Kymesh * y * b) / 2)
                 U_kdelta[0,0] = factor
                 U_kdelta[1,1] = factor.conj()
                 R = np.einsum('ij,jlxy-> ilxy', P, U_kdelta)
                 rhos[u] = np.einsum('ijxy, jl, mlxy-> imxy', R, sigmas[nu], R.conj())
                 u += 1
-    return rhos
+    return hermitize_operator(rhos)
 
 def make_single_rho_tilde(l_idx, interaction, a, b, Kymesh, Kxmesh, vecs):
     """
     Compute rhos_tilde for a SINGLE operator index l_idx.
-    Returns an array of shape (6, 6, Ny, nx), dtype=complex64.
+    Returns a Hermitian array of shape (6, 6, Ny, Nx), dtype=complex128.
     """
     Ny, nx = Kymesh.shape
     # Walk through interaction list to find which (x,y,orb1,orb2,nu)
@@ -789,15 +793,16 @@ def make_single_rho_tilde(l_idx, interaction, a, b, Kymesh, Kxmesh, vecs):
                 P[orb2 - 1, 1] = 1
                 factor = np.exp(
                     -1j * (Kxmesh * x * a + Kymesh * y * b) / 2
-                ).astype(np.complex64)
-                U_kdelta = np.zeros((2, 2, Ny, nx), dtype=np.complex64)
+                ).astype(np.complex128)
+                U_kdelta = np.zeros((2, 2, Ny, nx), dtype=np.complex128)
                 U_kdelta[0, 0] = factor
                 U_kdelta[1, 1] = factor.conj()
                 R = np.einsum('ij,jlxy->ilxy', P, U_kdelta)
-                rho = np.einsum('ijxy,jl,mlxy->imxy',
-                                R, sigmas[nu], R.conj())
+                rho = hermitize_operator(np.einsum(
+                    'ijxy,jl,mlxy->imxy', R, sigmas[nu], R.conj()
+                ))
                 # ---- apply operator_tilde transform ----
-                return operator_tilde(rho, vecs)   # your existing function
+                return hermitize_operator(operator_tilde(rho, vecs))
             u += 1
     raise IndexError(f"l_idx={l_idx} out of range (Nop={u})")
 
