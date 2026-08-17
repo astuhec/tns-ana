@@ -158,7 +158,7 @@ class TNS:
         assert relative_error < 1e-10, (
             f"Nonlocal MF current is not Hermitian: {relative_error}"
         )
-
+        print(f"relative error of nonlocal MF current is {relative_error}", flush=True)
         mat_tilde = tokovi.hermitize_operator(tokovi.operator_tilde(mat, self.vecs))
         self.mat_x = mat_tilde[0]
         self.mat_y = mat_tilde[1]
