@@ -149,7 +149,16 @@ class TNS:
 
         # non-local interaction current
         mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V)
-        mat = tokovi.hermitize_operator(mat1 + mat2 + mat3 + mat4)
+        mat = mat1 + mat2 + mat3 + mat4
+        mat_dag = np.swapaxes(mat.conj(), 1, 2)
+        relative_error = (
+            np.linalg.norm(mat - mat_dag)
+            / max(np.linalg.norm(mat), 1e-30)
+        )
+        assert relative_error < 1e-10, (
+            f"Nonlocal MF current is not Hermitian: {relative_error}"
+        )
+
         mat_tilde = tokovi.hermitize_operator(tokovi.operator_tilde(mat, self.vecs))
         self.mat_x = mat_tilde[0]
         self.mat_y = mat_tilde[1]
