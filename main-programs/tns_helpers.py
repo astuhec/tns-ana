@@ -166,10 +166,7 @@ def Rho_next(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu, maxiter, 
         N_iters += 1
     rho_dag = np.swapaxes(rho.conj(), 0, 1)
 
-    relative_error = (
-        np.linalg.norm(rho - rho_dag)
-        / max(np.linalg.norm(rho), 1e-30)
-    )
+    relative_error = np.linalg.norm(rho - rho_dag) / max(np.linalg.norm(rho), 1e-30)
     if relative_error > 1e-15:
         print("rho Hermiticity error:", relative_error, flush=True)
     rho = 0.5 * (rho + np.swapaxes(rho.conj(), 0, 1))
