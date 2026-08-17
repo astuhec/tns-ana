@@ -170,6 +170,8 @@ def Rho_next(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu, maxiter, 
     if relative_error > 1e-15:
         print("rho Hermiticity error:", relative_error, flush=True)
     rho = 0.5 * (rho + np.swapaxes(rho.conj(), 0, 1))
+    fock = H_fock(Kxmesh, Nk, rho, a, V)
+    hartree = H_hartree(rho, Nk, U, V, hartree_list)
     energije, vecs, fs = H_diagonalize(hop, perturb, hartree, fock, T, mu, eps=0)
     return rho, energije, fs, vecs, fock, hartree, err, Occupation(rho)
 
