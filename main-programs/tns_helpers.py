@@ -163,7 +163,6 @@ def Rho_next(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V, T, mu, maxiter, 
         rho = rho_new * mix + rho * (1 - mix)
         fock = H_fock(Kxmesh, Nk, rho, a, V)
         hartree = H_hartree(rho, Nk, U, V, hartree_list)
-        rho = rho_new * mix + rho * (1 - mix)
         N_iters += 1
     energije, vecs, fs = H_diagonalize(hop, perturb, hartree, fock, T, mu, eps=0)
     return rho, energije, fs, vecs, fock, hartree, err, Occupation(rho)
