@@ -448,8 +448,8 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V):
                     g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b2')
                     gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
                     M4b[nu, orb1-1, orb1_-1] += gh
-
-    return 0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b
+    return M3, M6, -M4a, -M4b
+    #return 0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b
 
 ''' this function does same as mf_matrix1,2,3,4
 but it is more convenient if called many times because it uses some precomputed stuff '''
