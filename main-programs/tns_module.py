@@ -88,7 +88,8 @@ class TNS:
         
         self.kinetic_extend = tokovi.kinetic(extend=True, faktor=self.faktor, file=hopping_file)
         self.kinetic = tokovi.kinetic(faktor=self.faktor, file=hopping_file)
-        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic, faktor=self.faktor, pos=pos)
+        # self.kinetic has already been rescaled by self.faktor in tokovi.kinetic.
+        self.tok = tokovi.j_tok(self.kymesh, self.kxmesh, self.a, self.b, self.b2, self.kinetic, pos=pos)
         self.dH_dk = tokovi.velocity_HF(self.kymesh, self.kxmesh, self.a, self.b, self.kinetic)
         self.interaction = tokovi.interaction(file=interaction_file)
         if pos==None:
@@ -143,13 +144,13 @@ class TNS:
         self.velocity_y = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[1] + self.dfock_dk[1], self.vecs).real)
 
         # Kubo's velocities
-        self.current_x = tokovi.operator_tilde(self.tok[0], self.vecs)
-        self.current_y = tokovi.operator_tilde(self.tok[1], self.vecs)
+        self.current_x = tokovi.hermitize_operator(tokovi.operator_tilde(self.tok[0], self.vecs))
+        self.current_y = tokovi.hermitize_operator(tokovi.operator_tilde(self.tok[1], self.vecs))
 
         # non-local interaction current
         mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V)
-        mat = mat1 + mat2 + mat3 + mat4
-        mat_tilde = tokovi.operator_tilde(mat, self.vecs)
+        mat = tokovi.hermitize_operator(mat1 + mat2 + mat3 + mat4)
+        mat_tilde = tokovi.hermitize_operator(tokovi.operator_tilde(mat, self.vecs))
         self.mat_x = mat_tilde[0]
         self.mat_y = mat_tilde[1]
         
