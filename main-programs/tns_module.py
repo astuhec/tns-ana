@@ -270,7 +270,7 @@ class TNS:
 
                 if save_during:
                     results_intermediate = self.collect_results()
-                    np.savez(f'{file_name}', **results_intermediate)
+                    np.savez(file_name, **results_intermediate)
         print('-' * 80 + '\n' + \
               'Finished calculation.', flush=True)
 
