@@ -448,8 +448,10 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V):
                     g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b2')
                     gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
                     M4b[nu, orb1-1, orb1_-1] += gh
-    return M3, M6, -M4a, -M4b
-    #return 0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b
+    #return M3, M6, -M4a, -M4b
+    return 0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b
+# here there must be factor 0.5 because V n_a n_b = V n_b n_a, and so interaction was counted twice
+# this is different than in Takarada, where 0.5 is counted in the geom[""]
 
 ''' this function does same as mf_matrix1,2,3,4
 but it is more convenient if called many times because it uses some precomputed stuff '''
@@ -716,23 +718,24 @@ def mf_matrix4(Kymesh, Kxmesh, rho, a, b, U, V, pos, kinetic, interaction):
                                 matrix[nu, orb1 - 1, orb1_ - 1] += gh
     return -matrix * 0.5
 
-def interaction_expand(interaction, U, V, a):
-    storing = []
+def thetas_kernel(interaction, U, V, a):
+    #storing = []
     thetas = []
-    for i, (x, _, orb1, orb2) in enumerate(interaction):
+    for i, (x, y, orb1, orb2) in enumerate(interaction):
         if orb1 == orb2:
-            nus = [0]
+            #nus = [0]
             Vs = [U/4]
             delta = 0.
             thetas += Vs
-            storing.append([orb1, orb2, delta, nus, Vs])
+            #storing.append([orb1, orb2, delta, nus, Vs])
         elif orb1 < orb2:
-            nus = [0,1,2,3]
+            #nus = [0,1,2,3]
             Vs = [V, -V/2, -V/2, -V]
             delta = a * x
             thetas += Vs
-            storing.append([orb1, orb2, delta, nus, Vs])
-    return storing, thetas
+            #storing.append([orb1, orb2, delta, nus, Vs])
+    #return storing, thetas
+    return thetas
 
 
 sigmas = np.zeros((4, 2, 2), dtype=np.complex128)

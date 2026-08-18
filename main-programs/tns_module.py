@@ -100,7 +100,7 @@ class TNS:
                 pos.append([0.0,0.0])
             self.pos = np.array(pos)
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
-        self.interaction_exp, self.thetas = tokovi.interaction_expand(self.interaction, self.U, self.V, self.a)
+        self.thetas = tokovi.thetas_kernel(self.interaction, self.U, self.V, self.a)
         self.velocities()
         
         self.phis = []
