@@ -12,13 +12,14 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None):
+                 Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
             params = json.load(f)
 
-        self.Ny, self.Nx = params["Ny"], params["Nx"]
+        self.Ny = params["Ny"] if Ny==None else Ny
+        self.Nx = params["Nx"] if Nx==None else Nx
 
         self.N_epsilon = params["N_epsilon"]
         
