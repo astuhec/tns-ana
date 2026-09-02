@@ -1099,7 +1099,7 @@ def compute_chi(
     rho_tilde_factory,
     verbose=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
-    eps=1e-5
+    eps=1e-5, Gammas=None
 ):
     omegas = np.asarray(omegas)
     N_om   = len(omegas)
