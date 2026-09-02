@@ -419,7 +419,7 @@ class TNS:
         self.L12y_corr.append(tokovi.to_scalar_if_single(l12y))
         self.L12qy_corr.append(tokovi.to_scalar_if_single(l12qy))
 
-    def optical_responses(self, input_optical, json_file=True):
+    def optical_responses(self, input_optical, json_file=True, Gammas=None):
         if json_file:
             with open(input_optical, "r", encoding="utf-8") as f:
                 params = json.load(f)
@@ -448,7 +448,7 @@ class TNS:
         results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas,
                                                   self.current_x, self.mat_x, self.current_y, self.mat_y,
                                                   self.energije, rho_tilde_factory,
-                                                  n_workers=n_workers, eps=eps, )
+                                                  n_workers=n_workers, eps=eps, Gammas=Gammas )
         return omega0, results_x, results_y, results_xy, results_yx
 
     def reset(self):
