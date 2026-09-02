@@ -272,7 +272,7 @@ def spektralna_orb(omegas, mu, energije_k, Gamma):
     return A
 
 @njit(parallel=True, cache=True)
-def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu):
+def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu, Gammas=None):
     Norb, Ny, Nx = energije.shape
     Nk = Ny*Nx
     Nw = len(epsilons)
@@ -288,12 +288,17 @@ def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu):
                 multiply = 1
             else:
                 multiply = 2
-
-            A = spektralna_orb(epsilons, mu, energije[:,m,n], Gamma)
-            for a in range(Norb):
-                for b in range(Norb):
-                    phi_local += multiply * (mat1[a,b,m,n] * A[:,b] * mat2[b,a,m,n] * A[:,a]).real
-
+            if Gammas==None:
+                A = spektralna_orb(epsilons, mu, energije[:,m,n], Gamma)
+                for a in range(Norb):
+                    for b in range(Norb):
+                        phi_local += multiply * (mat1[a,b,m,n] * A[:,b] * mat2[b,a,m,n] * A[:,a]).real
+            else:
+                for a in range(Norb):
+                    for b in range(Norb):
+                        Aa = spektralna_orb(epsilons, mu, energije[a,m,n], Gammas[a])
+                        Ab = spektralna_orb(epsilons, mu, energije[b,m,n], Gammas[b])
+                        phi_local += multiply * (mat1[a,b,m,n] * Ab * mat2[b,a,m,n] * Aa).real
         phi_temporary[m,:] = phi_local
 
     phi = np.sum(phi_temporary, axis=0)
