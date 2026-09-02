@@ -832,7 +832,7 @@ def fd(eps, mu, T):
     return 1.0 / (np.exp((eps - mu) / T) + 1.0)
 
 @njit(cache=True)
-def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
+def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, x_m, x_n, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
     w    = omega / Gamma
     e_mk = E_mk  / Gamma
     e_nk = E_nk  / Gamma
@@ -891,10 +891,10 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
         for i in range(n_nodes):
             e   = mid + half * nodes[i]
             ew  = e + w
-            dm  = e - e_mk
-            dn  = e - e_nk
-            dmw = dm + w
-            dnw = dn + w
+            dm  = (e - e_mk) / x_m
+            dn  = (e - e_nk) / x_n
+            dmw = (dm + w) / x_m
+            dnw = (dn + w) / x_n
             pref = e - mu_ + 0.5 * w
             wi   = weights[i] * half
 
@@ -929,15 +929,18 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
             res_w_nm_r += wi * pref * nm_r
             res_w_nm_i += wi * pref * nm_i
 
-    res_mn   = (res_mn_r   + 1j * res_mn_i)   / Gamma
-    res_nm   = (res_nm_r   + 1j * res_nm_i)   / Gamma
-    res_w_mn =  res_w_mn_r + 1j * res_w_mn_i
-    res_w_nm =  res_w_nm_r + 1j * res_w_nm_i
+    x_mn = x_m * x_n
+    res_mn   = (res_mn_r   + 1j * res_mn_i)   / Gamma / x_mn
+    res_nm   = (res_nm_r   + 1j * res_nm_i)   / Gamma / x_mn
+    res_w_mn =  res_w_mn_r + 1j * res_w_mn_i / x_mn
+    res_w_nm =  res_w_nm_r + 1j * res_w_nm_i / x_mn
 
     return res_mn, res_nm, res_w_mn, res_w_nm
 
 @njit(parallel=True, cache=True)
-def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5):
+def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5, Gammas=None):
+    if Gammas==None:
+        x_m,x_n=1,1
     Norb, Ny, Nx = energije.shape
 
     pi_mn  = np.zeros((Norb, Norb, Ny, Nx), dtype=np.complex128)
@@ -949,8 +952,12 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
         for j in range(Nx):
             for m in range(Norb):
                 for n in range(m,Norb):
-
-                    pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,i,j], energije[n,i,j], Gamma, mu_, invt, nodes, weights, eps)
+                    if Gammas==None:
+                        x_m, x_n = 1, 1
+                    else:
+                        x_m = Gammas[m] / Gamma
+                        x_n = Gammas[n] / Gamma
+                    pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,i,j], energije[n,i,j], Gamma, x_m, x_n, mu_, invt, nodes, weights, eps)
 
                     pi_mn[m,n,i,j] = pi_mnk
                     pi_nm[m,n,i,j] = pi_nmk
@@ -1013,7 +1020,7 @@ def compute_single_om_fused(
     thetas, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
     energije,
     rho_tilde_factory, rho_tilde_cache, rho_tilde_lock,
-    eps=1e-5
+    eps=1e-5, Gammas=None
 ):
     Nop = len(thetas)
     
@@ -1022,7 +1029,7 @@ def compute_single_om_fused(
 
     # ── ONE precomputation pass for this omega ──────────────────────────
     pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
-        om, energije, Gamma, mu_, invt, nodes, weights, eps
+        om, energije, Gamma, mu_, invt, nodes, weights, eps, Gammas
     )
 
     # ── chi0 matrix  (Nop x Nop calls, but now cheap) ──────────────────
@@ -1110,7 +1117,7 @@ def compute_chi(
             rho_tilde_factory,
             rho_tilde_cache,   # <-- shared, persistent
             rho_tilde_lock,
-            eps=eps
+            eps=eps, Gammas=Gammas
         )
         return om_idx, result
 
