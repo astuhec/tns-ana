@@ -281,3 +281,6 @@ def DoS(Kymesh, Kxmesh, energije, omegas, mu, velocity_x, velocity_y, faktor=1.)
                 for orb in range(6):
                     dos[orb] += 2. * 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
     return dos * 2 / Nk # factor 2 for spin
+
+def colors(vecs):
+    return np.einsum('ijkl->jkl', np.abs(vecs[:4,:,:,:])**2)
