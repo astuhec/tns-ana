@@ -294,11 +294,16 @@ def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu, Gammas=None):
                     for b in range(Norb):
                         phi_local += multiply * (mat1[a,b,m,n] * A[:,b] * mat2[b,a,m,n] * A[:,a]).real
             else:
+                A = np.empty((Nw, Norb))
+
+                for a in range(Norb):
+                    gamma_a = Gammas[a]
+                    delta_a = epsilons - (energije[a, m, n] - mu)
+                    A[:, a] = gamma_a / np.pi / (delta_a**2 + gamma_a**2)
+
                 for a in range(Norb):
                     for b in range(Norb):
-                        Aa = spektralna_orb(epsilons, mu, energije[a,m,n], Gammas[a])
-                        Ab = spektralna_orb(epsilons, mu, energije[b,m,n], Gammas[b])
-                        phi_local += multiply * (mat1[a,b,m,n] * Ab * mat2[b,a,m,n] * Aa).real
+                        phi_local += multiply * (mat1[a, b, m, n]* A[:, b]* mat2[b, a, m, n]* A[:, a]).real
         phi_temporary[m,:] = phi_local
 
     phi = np.sum(phi_temporary, axis=0)
