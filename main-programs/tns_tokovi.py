@@ -412,10 +412,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
                     if orb1==orb1_ and x==x_ and y==y_: deltas=0.0
                     elif orb1_==orb2 and x_==0.0 and y_==0.0: deltas=0.0
 
-                if deltas==0.0:
-                    continue
-
-                else:
+                if deltas!=0.0:
                     lega = geom["pos"][orb2] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
                     if orb1_ == orb2_: V_ = U
                     else: V_ = 2. * V
@@ -447,10 +444,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
                 if impose_deltas:
                     if orb1==orb1_ and x_==0.0 and y_==0.0: deltas=0.0
                     if orb1_==orb2 and x+x_==0.0 and y+y_==0.0: deltas=0.0
-
-                if deltas==0.0:
-                    continue
-                else:
+                if deltas!=0.0:
                     lega = geom["pos"][orb1] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
                     if orb1_ == orb2_: V_ = U
                     else: V_ = 2. * V
