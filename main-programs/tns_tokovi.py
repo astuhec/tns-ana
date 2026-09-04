@@ -369,7 +369,7 @@ def compute_g_fft_single(phases, l, m, variant):
         g = np.conj(phases["int"][m])
     return np.fft.fft2(np.fft.ifftshift(g))
 
-def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V):
+def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas=False):
     # note: g_ffts argument is GONE, computed on the fly instead
     Ny, Nx = Kymesh.shape
     Nk = Ny * Nx
@@ -406,58 +406,76 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V):
             orb1_, orb2_ = int(orb1_), int(orb2_)
 
             if orb2 == orb2_:
-                lega = geom["pos"][orb2] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
-                if orb1_ == orb2_: V_ = U
-                else: V_ = 2. * V
 
-                for nu in range(2):
-                    M3[nu, orb1-1, orb2-1] += -1j * t * V_ * lega[nu] * phase_k * ns[orb1_-1] / Nk
+                deltas=1.0
+                if impose_deltas:
+                    if orb1==orb1_ and x==x_: deltas=0.0
+                    elif orb1_==orb2 and x_==0.0: deltas=0.0
 
-                suma = np.sum(rho[orb2-1, orb1-1] * phase_k)
-                for nu in range(2):
-                    M6[nu, orb1_-1, orb1_-1] += -1j * t * V_ * lega[nu] * suma / Nk
+                if deltas==0.0:
+                    continue
 
-                if orb1_ == orb2_: V_ = U
-                else: V_ = V
+                else:
+                    lega = geom["pos"][orb2] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
+                    if orb1_ == orb2_: V_ = U
+                    else: V_ = 2. * V
 
-                rho_fft = get_rho_fft(orb1_-1, orb1-1)
-                for nu in range(2):
-                    g_fft = -1j * V_ * lega[nu] * get_g_fft(l, m, 'M4a1')
-                    gh = np.fft.fftshift(np.fft.ifft2(g_fft * rho_fft))
-                    M4a[nu, orb1_-1, orb2-1] += fk * gh
+                    for nu in range(2):
+                        M3[nu, orb1-1, orb2-1] += -1j * t * V_ * lega[nu] * phase_k * ns[orb1_-1] / Nk
 
-                h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
-                for nu in range(2):
-                    g_fft = -1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b1')
-                    gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
-                    M4b[nu, orb1-1, orb1_-1] += gh
+                    suma = np.sum(rho[orb2-1, orb1-1] * phase_k)
+                    for nu in range(2):
+                        M6[nu, orb1_-1, orb1_-1] += -1j * t * V_ * lega[nu] * suma / Nk
+
+                    if orb1_ == orb2_: V_ = U
+                    else: V_ = V
+
+                    rho_fft = get_rho_fft(orb1_-1, orb1-1)
+                    for nu in range(2):
+                        g_fft = -1j * V_ * lega[nu] * get_g_fft(l, m, 'M4a1')
+                        gh = np.fft.fftshift(np.fft.ifft2(g_fft * rho_fft))
+                        M4a[nu, orb1_-1, orb2-1] += fk * gh
+
+                    h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
+                    for nu in range(2):
+                        g_fft = -1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b1')
+                        gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
+                        M4b[nu, orb1-1, orb1_-1] += gh
 
             if orb1 == orb2_:
-                lega = geom["pos"][orb1] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
-                if orb1_ == orb2_: V_ = U
-                else: V_ = 2. * V
+                deltas=1.0
+                if impose_deltas:
+                    if orb1==orb1_ and x_==0.0: deltas=0.0
+                    if orb1_==orb2 and x+x_==0.0: deltas=0.0
 
-                for nu in range(2):
-                    M3[nu, orb1-1, orb2-1] += +1j * t * V_ * lega[nu] * phase_k * ns[orb1_-1] / Nk
+                if deltas==0.0:
+                    continue
+                else:
+                    lega = geom["pos"][orb1] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
+                    if orb1_ == orb2_: V_ = U
+                    else: V_ = 2. * V
 
-                suma = np.sum(rho[orb2-1, orb1-1] * phase_k)
-                for nu in range(2):
-                    M6[nu, orb1_-1, orb1_-1] += +1j * t * V_ * lega[nu] * suma / Nk
+                    for nu in range(2):
+                        M3[nu, orb1-1, orb2-1] += +1j * t * V_ * lega[nu] * phase_k * ns[orb1_-1] / Nk
 
-                if orb1_ == orb2_: V_ = U
-                else: V_ = V
+                    suma = np.sum(rho[orb2-1, orb1-1] * phase_k)
+                    for nu in range(2):
+                        M6[nu, orb1_-1, orb1_-1] += +1j * t * V_ * lega[nu] * suma / Nk
 
-                rho_fft = get_rho_fft(orb1_-1, orb1-1)
-                for nu in range(2):
-                    g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4a2')
-                    gh = np.fft.fftshift(np.fft.ifft2(g_fft * rho_fft))
-                    M4a[nu, orb1_-1, orb2-1] += fk * gh
+                    if orb1_ == orb2_: V_ = U
+                    else: V_ = V
 
-                h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
-                for nu in range(2):
-                    g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b2')
-                    gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
-                    M4b[nu, orb1-1, orb1_-1] += gh
+                    rho_fft = get_rho_fft(orb1_-1, orb1-1)
+                    for nu in range(2):
+                        g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4a2')
+                        gh = np.fft.fftshift(np.fft.ifft2(g_fft * rho_fft))
+                        M4a[nu, orb1_-1, orb2-1] += fk * gh
+
+                    h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
+                    for nu in range(2):
+                        g_fft = +1j * V_ * lega[nu] * get_g_fft(l, m, 'M4b2')
+                        gh = np.fft.fftshift(np.fft.ifft2(g_fft * h_fft))
+                        M4b[nu, orb1-1, orb1_-1] += gh
     #return M3, M6, -M4a, -M4b
     return 0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b
 # here there must be factor 0.5 because V n_a n_b = V n_b n_a, and so interaction was counted twice
