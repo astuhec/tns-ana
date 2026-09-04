@@ -409,8 +409,8 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
 
                 deltas=1.0
                 if impose_deltas:
-                    if orb1==orb1_ and x==x_: deltas=0.0
-                    elif orb1_==orb2 and x_==0.0: deltas=0.0
+                    if orb1==orb1_ and x==x_ and y==y_: deltas=0.0
+                    elif orb1_==orb2 and x_==0.0 and y_==0.0: deltas=0.0
 
                 if deltas==0.0:
                     continue
@@ -445,8 +445,8 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
             if orb1 == orb2_:
                 deltas=1.0
                 if impose_deltas:
-                    if orb1==orb1_ and x_==0.0: deltas=0.0
-                    if orb1_==orb2 and x+x_==0.0: deltas=0.0
+                    if orb1==orb1_ and x_==0.0 and y_==0.0: deltas=0.0
+                    if orb1_==orb2 and x+x_==0.0 and y+y_==0.0: deltas=0.0
 
                 if deltas==0.0:
                     continue
