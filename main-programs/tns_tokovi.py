@@ -414,6 +414,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
 
                 if deltas!=0.0:
                     lega = geom["pos"][orb2] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
+                    # M3 and M6 are terms from <c_sigma^dag c_sigma>, they get factor of 2 [for interorbital interaction V] from sum over sigma
                     if orb1_ == orb2_: V_ = U
                     else: V_ = 2. * V
 
@@ -424,6 +425,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
                     for nu in range(2):
                         M6[nu, orb1_-1, orb1_-1] += -1j * t * V_ * lega[nu] * suma / Nk
 
+                    # M4a and M4b are terms from <c_sigma^dag c_{sigma'}>, this gives delta_{sigma,sigma'}, so no extra factor of 2
                     if orb1_ == orb2_: V_ = U
                     else: V_ = V
 
