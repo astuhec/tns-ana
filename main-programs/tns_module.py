@@ -183,7 +183,8 @@ class TNS:
         self.err = err
         self.n = n
 
-    def run_Tdependence(self, input_temperature, save_during=False, file_name=None, own_beta=None, betas_own=None, stops_own=None):
+    def run_Tdependence(self, input_temperature, save_during=False, file_name='out.npz', outfile_name='data_out.npz',
+                        own_beta=None, betas_own=None, stops_own=None):
         
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
@@ -272,6 +273,17 @@ class TNS:
                 if save_during:
                     results_intermediate = self.collect_results()
                     np.savez(file_name, **results_intermediate)
+
+                    data = {'rho' : self.rho,
+                            'T' : self.T,
+                            'vecs' : self.vecs,
+                            'mu' : self.mu,
+                            'energije' : self.energije,
+                            'hartree' : self.hartree,
+                            'fock' : self.fock,
+                            'fs' : self.fs}
+                    np.savez(outfile_name, **data)
+
         print('-' * 80 + '\n' + \
               'Finished calculation.', flush=True)
 
