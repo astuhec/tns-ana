@@ -12,8 +12,7 @@ def Rho0(Ny, Nx):
     return rho0
 
 def Rhoinfty(Ny, Nx):
-    nx = Nx//2 + 1
-    rho0 = np.zeros((6, 6, Ny, nx), dtype='complex')
+    rho0 = np.zeros((6, 6, Ny, Nx), dtype='complex')
     for i in range(6):
         rho0[i, i, :, :] = 2/6
     return rho0
