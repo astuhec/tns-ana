@@ -473,8 +473,7 @@ class TNS:
         self.rho = helpers.Rhoinfty(self.Ny, self.Nx)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        
-        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.kymesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.b, self.b2, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
+        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
         self.energije = energije
         self.fs = fs
         self.vecs = vecs
