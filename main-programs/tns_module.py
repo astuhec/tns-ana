@@ -123,6 +123,10 @@ class TNS:
         self.L12y = []
         self.L12qx = []
         self.L12qy = []    
+        self.L11xy = []    
+        self.L12xy = []    
+        self.L12qxy = []    
+        self.L12qyx = []    
 
         self.L11x_0 = []
         self.L12x_0 = []
@@ -137,6 +141,19 @@ class TNS:
         self.L11y_corr = []
         self.L12y_corr = []
         self.L12qy_corr = []
+
+        self.L11xy_0 = []
+        self.L12xy_0 = []
+        self.L12qxy_0 = []
+        self.L12qyx_0 = []
+        self.L11xy_corr = []
+        self.L12xy_corr = []
+        self.L12qxy_corr = []
+        self.L12qyx_corr = []  
+        self.L11yx_0 = []
+        self.L12yx_0 = []
+        self.L11yx_corr = []
+        self.L12yx_corr = []
 
     def velocities(self) -> None:
         # Boltzmann's group velocities using Hellmann-Feynmann
@@ -292,6 +309,9 @@ class TNS:
         phi_y = tokovi.phi_Kubo(self.current_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
         phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
+        phi_xy = tokovi.phi_Kubo(self.current_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
+        phiQ_xy = tokovi.phi_Kubo(self.mat_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
+        phiQ_yx = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
 
         l11_x = np.pi * tokovi.integral_omega(phi_x * mfd1, epsilons)
         l12_x = np.pi * tokovi.integral_omega(epsilons * phi_x * mfd1, epsilons)
@@ -301,7 +321,12 @@ class TNS:
         l12_y = np.pi * tokovi.integral_omega(epsilons * phi_y * mfd1, epsilons)
         l12q_y = np.pi * tokovi.integral_omega(phiQ_y * mfd1, epsilons)
 
-        return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y
+        l11_xy = np.pi * tokovi.integral_omega(phi_xy * mfd1, epsilons)
+        l12_xy = np.pi * tokovi.integral_omega(epsilons * phi_xy * mfd1, epsilons)
+        l12q_xy = np.pi * tokovi.integral_omega(phiQ_xy * mfd1, epsilons)
+        l12q_yx = np.pi * tokovi.integral_omega(phiQ_yx * mfd1, epsilons)
+
+        return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l12q_yx
     
     def DC_coefficients(self, eps, Nomega, Gammas):
         T = self.Ts[-1]
@@ -327,19 +352,28 @@ class TNS:
         l12qx = np.zeros(Ngamma)
         l12qy = np.zeros(Ngamma)
 
+        l11xy = np.zeros(Ngamma)
+        l12xy = np.zeros(Ngamma)
+        l12qxy = np.zeros(Ngamma)
+        l12qyx = np.zeros(Ngamma)
+
         for g, Gamma in enumerate(Gammas):
             l11x_boltz[g] = K0b_x / (2*Gamma)
             l11y_boltz[g] = K0b_y / (2*Gamma)
             l12x_boltz[g] = K1b_x / (2*Gamma)
             l12y_boltz[g] = K1b_y / (2*Gamma)
 
-            l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y = self.ls_kubo(epsilons, Gamma, mfd1)
+            l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l12q_yx = self.ls_kubo(epsilons, Gamma, mfd1)
             l11x[g] = l11_x.real
             l11y[g] = l11_y.real
             l12x[g] = l12_x.real
             l12y[g] = l12_y.real
             l12qx[g] = l12q_x.real
             l12qy[g] = l12q_y.real
+            l11xy[g] = l11_xy.real
+            l12xy[g] = l12_xy.real
+            l12qxy[g] = l12q_xy.real
+            l12qyx[g] = l12q_yx.real
 
         self.L11x_boltz.append(tokovi.to_scalar_if_single(l11x_boltz))
         self.L11y_boltz.append(tokovi.to_scalar_if_single(l11y_boltz))
@@ -352,11 +386,16 @@ class TNS:
         self.L12y.append(tokovi.to_scalar_if_single(l12y))
         self.L12qx.append(tokovi.to_scalar_if_single(l12qx))
         self.L12qy.append(tokovi.to_scalar_if_single(l12qy))
+        self.L11xy.append(tokovi.to_scalar_if_single(l11xy))
+        self.L12xy.append(tokovi.to_scalar_if_single(l12xy))
+        self.L12qxy.append(tokovi.to_scalar_if_single(l12qxy))
+        self.L12qyx.append(tokovi.to_scalar_if_single(l12qyx))
 
     def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
         self.velocities()
         Ngamma = len(Gammas)
 
+        ''' xx ''' 
         l11x_0 = np.zeros(Ngamma)
         l12x_0 = np.zeros_like(l11x_0)
         l12qx_0 = np.zeros_like(l11x_0)
@@ -365,6 +404,7 @@ class TNS:
         l12x = np.zeros_like(l12x_0)
         l12qx = np.zeros_like(l12qx_0)
 
+        ''' yy ''' 
         l11y_0 = np.zeros_like(l11x_0)
         l12y_0 = np.zeros_like(l11x_0)
         l12qy_0 = np.zeros_like(l11x_0)
@@ -373,6 +413,24 @@ class TNS:
         l12y = np.zeros_like(l12x_0)
         l12qy = np.zeros_like(l12qx_0)
 
+        ''' xy '''
+        l11xy_0 = np.zeros_like(l11x_0)
+        l12xy_0 = np.zeros_like(l11x_0)
+        l12qxy_0 = np.zeros_like(l11x_0)
+
+        l11xy = np.zeros_like(l11x_0)
+        l12xy = np.zeros_like(l11x_0)
+        l12qxy = np.zeros_like(l11x_0)
+
+        ''' yx '''
+        l11yx_0 = np.zeros_like(l11x_0)
+        l12yx_0 = np.zeros_like(l11x_0)
+        l12qyx_0 = np.zeros_like(l11x_0)
+
+        l11yx = np.zeros_like(l11x_0)
+        l12yx = np.zeros_like(l11x_0)
+        l12qyx = np.zeros_like(l11x_0)
+
         self.factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
         for g, Gamma in enumerate(Gammas):
@@ -380,8 +438,9 @@ class TNS:
             invt = Gamma / self.Ts[-1]
 
             rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-            results_x, results_y, _, _ = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
+            results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
 
+            ''' xx '''
             Chi_jj0 = - results_x['chi_jj0'].imag
             dChi_jj  = - results_x['dchi_jj'].imag
             Chi_jj = Chi_jj0 + dChi_jj
@@ -400,6 +459,7 @@ class TNS:
             l12qx_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
             l12qx[g] = tokovi.find_DC_limit(omega0, Chi_matj)
 
+            ''' yy '''
             Chi_jj0 = - results_y['chi_jj0'].imag
             dChi_jj  = - results_y['dchi_jj'].imag
             Chi_jj = Chi_jj0 + dChi_jj
@@ -418,18 +478,71 @@ class TNS:
             l12qy_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
             l12qy[g] = tokovi.find_DC_limit(omega0, Chi_matj)
 
+            ''' xy '''
+            Chi_jj0 = - results_xy['chi_jj0'].imag
+            dChi_jj  = - results_xy['dchi_jj'].imag
+            Chi_jj = Chi_jj0 + dChi_jj
+            l11xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
+            l11xy[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+
+            Chi_jEj0 = - results_xy['chi_jEj0'].imag
+            dChi_jEj = - results_xy['dchi_jEj'].imag
+            Chi_jEj = Chi_jEj0 + dChi_jEj
+            l12xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
+            l12xy[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+
+            Chi_matj0 = - results_xy['chi_matj0'].imag
+            dChi_matj = - results_xy['dchi_matj'].imag
+            Chi_matj = Chi_matj0 + dChi_matj
+            l12qxy_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
+            l12qxy[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+
+            ''' yx '''
+            Chi_jj0 = - results_yx['chi_jj0'].imag
+            dChi_jj  = - results_yx['dchi_jj'].imag
+            Chi_jj = Chi_jj0 + dChi_jj
+            l11yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
+            l11yx[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+
+            Chi_jEj0 = - results_yx['chi_jEj0'].imag
+            dChi_jEj = - results_yx['dchi_jEj'].imag
+            Chi_jEj = Chi_jEj0 + dChi_jEj
+            l12yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
+            l12yx[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+
+            Chi_matj0 = - results_yx['chi_matj0'].imag
+            dChi_matj = - results_yx['dchi_matj'].imag
+            Chi_matj = Chi_matj0 + dChi_matj
+            l12qyx_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
+            l12qyx[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+
         self.L11x_0.append(tokovi.to_scalar_if_single(l11x_0))
         self.L12x_0.append(tokovi.to_scalar_if_single(l12x_0))
         self.L12qx_0.append(tokovi.to_scalar_if_single(l12qx_0))
         self.L11x_corr.append(tokovi.to_scalar_if_single(l11x))
         self.L12x_corr.append(tokovi.to_scalar_if_single(l12x))
         self.L12qx_corr.append(tokovi.to_scalar_if_single(l12qx))
+
         self.L11y_0.append(tokovi.to_scalar_if_single(l11y_0))
         self.L12y_0.append(tokovi.to_scalar_if_single(l12y_0))
         self.L12qy_0.append(tokovi.to_scalar_if_single(l12qy_0))
         self.L11y_corr.append(tokovi.to_scalar_if_single(l11y))
         self.L12y_corr.append(tokovi.to_scalar_if_single(l12y))
         self.L12qy_corr.append(tokovi.to_scalar_if_single(l12qy))
+
+        self.L11xy_0.append(tokovi.to_scalar_if_single(l11xy_0))
+        self.L12xy_0.append(tokovi.to_scalar_if_single(l12xy_0))
+        self.L12qxy_0.append(tokovi.to_scalar_if_single(l12qxy_0))
+        self.L11xy_corr.append(tokovi.to_scalar_if_single(l11xy))
+        self.L12xy_corr.append(tokovi.to_scalar_if_single(l12xy))
+        self.L12qxy_corr.append(tokovi.to_scalar_if_single(l12qxy))
+
+        self.L11yx_0.append(tokovi.to_scalar_if_single(l11yx_0))
+        self.L12yx_0.append(tokovi.to_scalar_if_single(l12yx_0))
+        self.L12qyx_0.append(tokovi.to_scalar_if_single(l12qyx_0))
+        self.L11yx_corr.append(tokovi.to_scalar_if_single(l11yx))
+        self.L12yx_corr.append(tokovi.to_scalar_if_single(l12yx))
+        self.L12qyx_corr.append(tokovi.to_scalar_if_single(l12qyx))
 
     def optical_responses(self, input_optical, json_file=True, Gammas=None):
         if json_file:

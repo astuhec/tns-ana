@@ -414,7 +414,6 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_deltas
 
                 if deltas!=0.0:
                     lega = geom["pos"][orb2] - geom["pos"][orb1_] - np.array([x_*a, y_*b])
-                    # M3 and M6 are terms from <c_sigma^dag c_sigma>, they get factor of 2 [for interorbital interaction V] from sum over sigma
                     if orb1_ == orb2_: V_ = U
                     else: V_ = 2. * V
 
@@ -1067,6 +1066,10 @@ def compute_single_om_fused(
 
     chi_jj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, pi_mn, pi_nm)
     chi_jj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, pi_mn, pi_nm)
+    chi_jEj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, piw_mn, piw_nm)
+    chi_jEj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, piw_mn, piw_nm)
+    chi_matj0_xy = chi_UV(mat_tilde_x, tok_tilde_y, pi_mn, pi_nm)
+    chi_matj0_yx = chi_UV(mat_tilde_y, tok_tilde_x, pi_mn, pi_nm)
 
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
     chi_jrho0_x = np.zeros(Nop, dtype=np.complex128)
@@ -1102,8 +1105,30 @@ def compute_single_om_fused(
 
     dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
+    dchi_jEj_xy = chi_jErho0_x @ thetas_diag @ inv @ chi_rhoj0_y
+    dchi_jEj_yx = chi_jErho0_y @ thetas_diag @ inv @ chi_rhoj0_x
+    dchi_matj_xy = chi_matrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
+    dchi_matj_yx = chi_matrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
 
-    return om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y, chi_jj0_xy, dchi_jj_xy, chi_jj0_yx, dchi_jj_yx
+    return (
+        om, chi0, chi_rpa,
+
+        chi_jj0_x, dchi_jj_x,
+        chi_jEj0_x, dchi_jEj_x,
+        chi_matj0_x, dchi_matj_x,
+
+        chi_jj0_y, dchi_jj_y,
+        chi_jEj0_y, dchi_jEj_y,
+        chi_matj0_y, dchi_matj_y,
+
+        chi_jj0_xy, dchi_jj_xy,
+        chi_jj0_yx, dchi_jj_yx,
+        chi_jEj0_xy, dchi_jEj_xy,
+        chi_jEj0_yx, dchi_jEj_yx,
+        chi_matj0_xy, dchi_matj_xy,
+        chi_matj0_yx, dchi_matj_yx
+    )
+
 
 def compute_chi(
     omegas,
@@ -1157,6 +1182,15 @@ def compute_chi(
     chi_jj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
     dchi_jj_arr_yx = np.zeros(N_om, dtype=np.complex128)
 
+    chi_jEj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
+    dchi_jEj_arr_xy = np.zeros(N_om, dtype=np.complex128)
+    chi_jEj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    dchi_jEj_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    chi_matj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
+    dchi_matj_arr_xy = np.zeros(N_om, dtype=np.complex128)
+    chi_matj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    dchi_matj_arr_yx = np.zeros(N_om, dtype=np.complex128)
+
     t_total = time.time()
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -1168,8 +1202,21 @@ def compute_chi(
         with tqdm(total=N_om, desc="Progress:", disable=not verbose) as pbar:
             for future in as_completed(futures):
                 om_idx, result = future.result()
-                om, chi0, chi_rpa, chi_jj0_x, dchi_jj_x, chi_jEj0_x, dchi_jEj_x, chi_matj0_x, dchi_matj_x, chi_jj0_y, dchi_jj_y, chi_jEj0_y, dchi_jEj_y, chi_matj0_y, dchi_matj_y, chi_jj0_xy, dchi_jj_xy, chi_jj0_yx, dchi_jj_yx = result
-
+                (
+                    om, chi0, chi_rpa,
+                    chi_jj0_x, dchi_jj_x,
+                    chi_jEj0_x, dchi_jEj_x,
+                    chi_matj0_x, dchi_matj_x,
+                    chi_jj0_y, dchi_jj_y,
+                    chi_jEj0_y, dchi_jEj_y,
+                    chi_matj0_y, dchi_matj_y,
+                    chi_jj0_xy, dchi_jj_xy,
+                    chi_jj0_yx, dchi_jj_yx,
+                    chi_jEj0_xy, dchi_jEj_xy,
+                    chi_jEj0_yx, dchi_jEj_yx,
+                    chi_matj0_xy, dchi_matj_xy,
+                    chi_matj0_yx, dchi_matj_yx,
+                ) = result
                 chi0_arr[om_idx]      = chi0
                 chi_rpa_arr[om_idx]   = chi_rpa
 
@@ -1188,15 +1235,17 @@ def compute_chi(
                 dchi_matj_arr_y[om_idx] = dchi_matj_y
 
                 chi_jj0_arr_xy[om_idx] = chi_jj0_xy
-                chi_jj0_arr_yx[om_idx] = chi_jj0_yx
-                dchi_jj_arr_xy[om_idx] = dchi_jj_xy
-                dchi_jj_arr_yx[om_idx] = dchi_jj_yx
-                
-                chi_jj0_arr_xy[om_idx] = chi_jj0_xy
                 dchi_jj_arr_xy[om_idx] = dchi_jj_xy
                 chi_jj0_arr_yx[om_idx] = chi_jj0_yx
                 dchi_jj_arr_yx[om_idx] = dchi_jj_yx
-
+                chi_jEj0_arr_xy[om_idx] = chi_jEj0_xy
+                dchi_jEj_arr_xy[om_idx] = dchi_jEj_xy
+                chi_jEj0_arr_yx[om_idx] = chi_jEj0_yx
+                dchi_jEj_arr_yx[om_idx] = dchi_jEj_yx
+                chi_matj0_arr_xy[om_idx] = chi_matj0_xy
+                dchi_matj_arr_xy[om_idx] = dchi_matj_xy
+                chi_matj0_arr_yx[om_idx] = chi_matj0_yx
+                dchi_matj_arr_yx[om_idx] = dchi_matj_yx
                 pbar.update(1)
 
     results_x = {'chi0' : chi0_arr,
@@ -1223,11 +1272,23 @@ def compute_chi(
                'dchi_matj' : dchi_matj_arr_y,
                'dchi_jEj' : dchi_jEj_arr_y}
     
-    results_xy = {'chi_jj0' : chi_jj0_arr_xy,
-                  'dchi_jj' : dchi_jj_arr_xy}
+    results_xy = {
+        'chi_jj0': chi_jj0_arr_xy,
+        'dchi_jj': dchi_jj_arr_xy,
+        'chi_jEj0': chi_jEj0_arr_xy,
+        'dchi_jEj': dchi_jEj_arr_xy,
+        'chi_matj0': chi_matj0_arr_xy,
+        'dchi_matj': dchi_matj_arr_xy,
+    }
 
-    results_yx = {'chi_jj0' : chi_jj0_arr_yx,
-                  'dchi_jj' : dchi_jj_arr_yx}
+    results_yx = {
+        'chi_jj0': chi_jj0_arr_yx,
+        'dchi_jj': dchi_jj_arr_yx,
+        'chi_jEj0': chi_jEj0_arr_yx,
+        'dchi_jEj': dchi_jEj_arr_yx,
+        'chi_matj0': chi_matj0_arr_yx,
+        'dchi_matj': dchi_matj_arr_yx,
+    }
     return results_x, results_y, results_xy, results_yx
 
 ''' operator in band basis obtained from operator in orbital basis '''
