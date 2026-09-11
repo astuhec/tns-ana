@@ -736,6 +736,21 @@ class TNS:
             "L12qy_0" : self.L12qy_0,
             "L11y_corr" : self.L11y_corr,
             "L12y_corr" : self.L12y_corr,
-            "L12qy_corr" : self.L12qy_corr
+            "L12qy_corr" : self.L12qy_corr,
+
+            "L11xy_0" : self.L11xy_0,
+            "L12xy_0" : self.L12xy_0,
+            "L12qxy_0" : self.L12qxy_0,
+            "L11xy_corr" : self.L11xy_corr,
+            "L12xy_corr" : self.L12xy_corr,
+            "L12qxy_corr" : self.L12qxy_corr,
+
+            "L11yx_0" : self.L11yx_0,
+            "L12yx_0" : self.L12yx_0,
+            "L12qyx_0" : self.L12qyx_0,
+            "L11yx_corr" : self.L11yx_corr,
+            "L12yx_corr" : self.L12yx_corr,
+            "L12qyx_corr" : self.L12qyx_corr,
             }
+        
         return results
