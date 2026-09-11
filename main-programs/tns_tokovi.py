@@ -307,7 +307,7 @@ def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu, Gammas=None):
         phi_temporary[m,:] = phi_local
 
     phi = np.sum(phi_temporary, axis=0)
-    return 2 * phi / Nk # factor 2 for spin
+    return 2.0 * phi / Nk # factor 2 for spin
 
 def input_data(Kymesh, Kxmesh, a, b, pos, kinetic, interaction):
     Ny, Nx = Kxmesh.shape
@@ -1010,7 +1010,7 @@ def chi_UV(U, V, pi_mn, pi_nm):
             chi_i += chi_ij
 
         chi += chi_i
-    return chi / Nk      
+    return chi / Nk * 2.0 # factor 2 for spin     
 
 def get_rho_tilde(i, cache, factory, lock):
     if i not in cache:
