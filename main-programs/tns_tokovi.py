@@ -1057,39 +1057,41 @@ def compute_single_om_fused(
 
     # ── chi_jj0 ────────────────────────────────────────────────────────
     chi_jj0_x = chi_UV(tok_tilde_x, tok_tilde_x, pi_mn, pi_nm)
-    chi_jEj0_x = chi_UV(tok_tilde_x, tok_tilde_x, piw_mn, piw_nm)
-    chi_matj0_x = chi_UV(mat_tilde_x, tok_tilde_x, pi_mn, pi_nm)
+    chi_jjE0_x = chi_UV(tok_tilde_x, tok_tilde_x, piw_mn, piw_nm)
+    chi_jmat0_x = chi_UV(mat_tilde_x, tok_tilde_x, pi_mn, pi_nm)
 
     chi_jj0_y = chi_UV(tok_tilde_y, tok_tilde_y, pi_mn, pi_nm)
-    chi_jEj0_y = chi_UV(tok_tilde_y, tok_tilde_y, piw_mn, piw_nm)
-    chi_matj0_y = chi_UV(mat_tilde_y, tok_tilde_y, pi_mn, pi_nm)
+    chi_jjE0_y = chi_UV(tok_tilde_y, tok_tilde_y, piw_mn, piw_nm)
+    chi_jmat0_y = chi_UV(mat_tilde_y, tok_tilde_y, pi_mn, pi_nm)
 
+    ''' l12_ab comes from correlation between charge and energy current, in this order !
+        important when looking at a neq b '''
     chi_jj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, pi_mn, pi_nm)
     chi_jj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, pi_mn, pi_nm)
-    chi_jEj0_xy = chi_UV(tok_tilde_x, tok_tilde_y, piw_mn, piw_nm)
-    chi_jEj0_yx = chi_UV(tok_tilde_y, tok_tilde_x, piw_mn, piw_nm)
-    chi_matj0_xy = chi_UV(mat_tilde_x, tok_tilde_y, pi_mn, pi_nm)
-    chi_matj0_yx = chi_UV(mat_tilde_y, tok_tilde_x, pi_mn, pi_nm)
+    chi_jjE0_xy = chi_UV(tok_tilde_x, tok_tilde_y, piw_mn, piw_nm)
+    chi_jjE0_yx = chi_UV(tok_tilde_y, tok_tilde_x, piw_mn, piw_nm)
+    chi_jmat0_xy = chi_UV(tok_tilde_x, mat_tilde_y, pi_mn, pi_nm)
+    chi_jmat0_yx = chi_UV(tok_tilde_y, mat_tilde_x, pi_mn, pi_nm)
 
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
     chi_jrho0_x = np.zeros(Nop, dtype=np.complex128)
     chi_rhoj0_x = np.zeros(Nop, dtype=np.complex128)
-    chi_jErho0_x = np.zeros(Nop, dtype=np.complex128)
-    chi_matrho0_x = np.zeros(Nop, dtype=np.complex128)
+    chi_rhojE0_x = np.zeros(Nop, dtype=np.complex128)
+    chi_rhomat0_x = np.zeros(Nop, dtype=np.complex128)
     chi_jrho0_y = np.zeros(Nop, dtype=np.complex128)
     chi_rhoj0_y = np.zeros(Nop, dtype=np.complex128)
-    chi_jErho0_y = np.zeros(Nop, dtype=np.complex128)
-    chi_matrho0_y = np.zeros(Nop, dtype=np.complex128)
+    chi_rhojE0_y = np.zeros(Nop, dtype=np.complex128)
+    chi_rhomat0_y = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
         chi_jrho0_x[i] = chi_UV(tok_tilde_x, rho_i, pi_mn, pi_nm)
         chi_rhoj0_x[i] = chi_UV(rho_i, tok_tilde_x, pi_mn, pi_nm)
-        chi_jErho0_x[i] = chi_UV(tok_tilde_x, rho_i, piw_mn, piw_nm)
-        chi_matrho0_x[i] = chi_UV(mat_tilde_x, rho_i, pi_mn, pi_nm)
+        chi_rhojE0_x[i] = chi_UV(rho_i, tok_tilde_x, piw_mn, piw_nm)
+        chi_rhomat0_x[i] = chi_UV(rho_i, mat_tilde_x, pi_mn, pi_nm)
         chi_jrho0_y[i] = chi_UV(tok_tilde_y, rho_i, pi_mn, pi_nm)
         chi_rhoj0_y[i] = chi_UV(rho_i, tok_tilde_y, pi_mn, pi_nm)
-        chi_jErho0_y[i] = chi_UV(tok_tilde_y, rho_i, piw_mn, piw_nm)
-        chi_matrho0_y[i] = chi_UV(mat_tilde_y, rho_i, pi_mn, pi_nm)
+        chi_rhojE0_y[i] = chi_UV(rho_i, tok_tilde_y, piw_mn, piw_nm)
+        chi_rhomat0_y[i] = chi_UV(rho_i, mat_tilde_y, pi_mn, pi_nm)
 
     # ── RPA ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
@@ -1097,38 +1099,37 @@ def compute_single_om_fused(
     chi_rpa = inv @ chi0
 
     dchi_jj_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_jEj_x = chi_jErho0_x @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_matj_x = chi_matrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
+    dchi_jjE_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_x
+    dchi_jmat_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_x
     dchi_jj_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
-    dchi_jEj_y = chi_jErho0_y @ thetas_diag @ inv @ chi_rhoj0_y
-    dchi_matj_y = chi_matrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
+    dchi_jjE_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_y
+    dchi_jmat_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_y
 
     dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_jEj_xy = chi_jErho0_x @ thetas_diag @ inv @ chi_rhoj0_y
-    dchi_jEj_yx = chi_jErho0_y @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_matj_xy = chi_matrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
-    dchi_matj_yx = chi_matrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
+    dchi_jjE_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_y
+    dchi_jjE_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_x
+    dchi_jmat_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_y
+    dchi_jmat_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_x
 
     return (
         om, chi0, chi_rpa,
 
         chi_jj0_x, dchi_jj_x,
-        chi_jEj0_x, dchi_jEj_x,
-        chi_matj0_x, dchi_matj_x,
+        chi_jjE0_x, dchi_jjE_x,
+        chi_jmat0_x, dchi_jmat_x,
 
         chi_jj0_y, dchi_jj_y,
-        chi_jEj0_y, dchi_jEj_y,
-        chi_matj0_y, dchi_matj_y,
+        chi_jjE0_y, dchi_jjE_y,
+        chi_jmat0_y, dchi_jmat_y,
 
         chi_jj0_xy, dchi_jj_xy,
         chi_jj0_yx, dchi_jj_yx,
-        chi_jEj0_xy, dchi_jEj_xy,
-        chi_jEj0_yx, dchi_jEj_yx,
-        chi_matj0_xy, dchi_matj_xy,
-        chi_matj0_yx, dchi_matj_yx
+        chi_jjE0_xy, dchi_jjE_xy,
+        chi_jjE0_yx, dchi_jjE_yx,
+        chi_jmat0_xy, dchi_jmat_xy,
+        chi_jmat0_yx, dchi_jmat_yx
     )
-
 
 def compute_chi(
     omegas,
@@ -1165,31 +1166,31 @@ def compute_chi(
 
     chi_jj0_arr_x   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr_x   = np.zeros(N_om,             dtype=np.complex128)
-    chi_matj0_arr_x = np.zeros(N_om, dtype=np.complex128)
-    chi_jEj0_arr_x = np.zeros(N_om, dtype=np.complex128)
-    dchi_matj_arr_x = np.zeros(N_om, dtype=np.complex128)
-    dchi_jEj_arr_x = np.zeros(N_om, dtype=np.complex128)
+    chi_jmat0_arr_x = np.zeros(N_om, dtype=np.complex128)
+    chi_jjE0_arr_x = np.zeros(N_om, dtype=np.complex128)
+    dchi_jmat_arr_x = np.zeros(N_om, dtype=np.complex128)
+    dchi_jjE_arr_x = np.zeros(N_om, dtype=np.complex128)
     
     chi_jj0_arr_y   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr_y   = np.zeros(N_om,             dtype=np.complex128)
-    chi_matj0_arr_y = np.zeros(N_om, dtype=np.complex128)
-    chi_jEj0_arr_y = np.zeros(N_om, dtype=np.complex128)
-    dchi_matj_arr_y = np.zeros(N_om, dtype=np.complex128)
-    dchi_jEj_arr_y = np.zeros(N_om, dtype=np.complex128)
+    chi_jmat0_arr_y = np.zeros(N_om, dtype=np.complex128)
+    chi_jjE0_arr_y = np.zeros(N_om, dtype=np.complex128)
+    dchi_jmat_arr_y = np.zeros(N_om, dtype=np.complex128)
+    dchi_jjE_arr_y = np.zeros(N_om, dtype=np.complex128)
 
     chi_jj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
     dchi_jj_arr_xy = np.zeros(N_om, dtype=np.complex128)
     chi_jj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
     dchi_jj_arr_yx = np.zeros(N_om, dtype=np.complex128)
 
-    chi_jEj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
-    dchi_jEj_arr_xy = np.zeros(N_om, dtype=np.complex128)
-    chi_jEj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
-    dchi_jEj_arr_yx = np.zeros(N_om, dtype=np.complex128)
-    chi_matj0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
-    dchi_matj_arr_xy = np.zeros(N_om, dtype=np.complex128)
-    chi_matj0_arr_yx = np.zeros(N_om, dtype=np.complex128)
-    dchi_matj_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    chi_jjE0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
+    dchi_jjE_arr_xy = np.zeros(N_om, dtype=np.complex128)
+    chi_jjE0_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    dchi_jjE_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    chi_jmat0_arr_xy = np.zeros(N_om, dtype=np.complex128) 
+    dchi_jmat_arr_xy = np.zeros(N_om, dtype=np.complex128)
+    chi_jmat0_arr_yx = np.zeros(N_om, dtype=np.complex128)
+    dchi_jmat_arr_yx = np.zeros(N_om, dtype=np.complex128)
 
     t_total = time.time()
 
@@ -1205,47 +1206,47 @@ def compute_chi(
                 (
                     om, chi0, chi_rpa,
                     chi_jj0_x, dchi_jj_x,
-                    chi_jEj0_x, dchi_jEj_x,
-                    chi_matj0_x, dchi_matj_x,
+                    chi_jjE0_x, dchi_jjE_x,
+                    chi_jmat0_x, dchi_jmat_x,
                     chi_jj0_y, dchi_jj_y,
-                    chi_jEj0_y, dchi_jEj_y,
-                    chi_matj0_y, dchi_matj_y,
+                    chi_jjE0_y, dchi_jjE_y,
+                    chi_jmat0_y, dchi_jmat_y,
                     chi_jj0_xy, dchi_jj_xy,
                     chi_jj0_yx, dchi_jj_yx,
-                    chi_jEj0_xy, dchi_jEj_xy,
-                    chi_jEj0_yx, dchi_jEj_yx,
-                    chi_matj0_xy, dchi_matj_xy,
-                    chi_matj0_yx, dchi_matj_yx,
+                    chi_jjE0_xy, dchi_jjE_xy,
+                    chi_jjE0_yx, dchi_jjE_yx,
+                    chi_jmat0_xy, dchi_jmat_xy,
+                    chi_jmat0_yx, dchi_jmat_yx,
                 ) = result
                 chi0_arr[om_idx]      = chi0
                 chi_rpa_arr[om_idx]   = chi_rpa
 
                 chi_jj0_arr_x[om_idx]   = chi_jj0_x
                 dchi_jj_arr_x[om_idx]   = dchi_jj_x
-                chi_jEj0_arr_x[om_idx] = chi_jEj0_x
-                dchi_jEj_arr_x[om_idx] = dchi_jEj_x
-                chi_matj0_arr_x[om_idx] = chi_matj0_x
-                dchi_matj_arr_x[om_idx] = dchi_matj_x
+                chi_jjE0_arr_x[om_idx] = chi_jjE0_x
+                dchi_jjE_arr_x[om_idx] = dchi_jjE_x
+                chi_jmat0_arr_x[om_idx] = chi_jmat0_x
+                dchi_jmat_arr_x[om_idx] = dchi_jmat_x
                 
                 chi_jj0_arr_y[om_idx]   = chi_jj0_y
                 dchi_jj_arr_y[om_idx]   = dchi_jj_y
-                chi_jEj0_arr_y[om_idx] = chi_jEj0_y
-                dchi_jEj_arr_y[om_idx] = dchi_jEj_y
-                chi_matj0_arr_y[om_idx] = chi_matj0_y
-                dchi_matj_arr_y[om_idx] = dchi_matj_y
+                chi_jjE0_arr_y[om_idx] = chi_jjE0_y
+                dchi_jjE_arr_y[om_idx] = dchi_jjE_y
+                chi_jmat0_arr_y[om_idx] = chi_jmat0_y
+                dchi_jmat_arr_y[om_idx] = dchi_jmat_y
 
                 chi_jj0_arr_xy[om_idx] = chi_jj0_xy
                 dchi_jj_arr_xy[om_idx] = dchi_jj_xy
                 chi_jj0_arr_yx[om_idx] = chi_jj0_yx
                 dchi_jj_arr_yx[om_idx] = dchi_jj_yx
-                chi_jEj0_arr_xy[om_idx] = chi_jEj0_xy
-                dchi_jEj_arr_xy[om_idx] = dchi_jEj_xy
-                chi_jEj0_arr_yx[om_idx] = chi_jEj0_yx
-                dchi_jEj_arr_yx[om_idx] = dchi_jEj_yx
-                chi_matj0_arr_xy[om_idx] = chi_matj0_xy
-                dchi_matj_arr_xy[om_idx] = dchi_matj_xy
-                chi_matj0_arr_yx[om_idx] = chi_matj0_yx
-                dchi_matj_arr_yx[om_idx] = dchi_matj_yx
+                chi_jjE0_arr_xy[om_idx] = chi_jjE0_xy
+                dchi_jjE_arr_xy[om_idx] = dchi_jjE_xy
+                chi_jjE0_arr_yx[om_idx] = chi_jjE0_yx
+                dchi_jjE_arr_yx[om_idx] = dchi_jjE_yx
+                chi_jmat0_arr_xy[om_idx] = chi_jmat0_xy
+                dchi_jmat_arr_xy[om_idx] = dchi_jmat_xy
+                chi_jmat0_arr_yx[om_idx] = chi_jmat0_yx
+                dchi_jmat_arr_yx[om_idx] = dchi_jmat_yx
                 pbar.update(1)
 
     results_x = {'chi0' : chi0_arr,
@@ -1254,11 +1255,11 @@ def compute_chi(
                'chi_jj0' : chi_jj0_arr_x,
                'dchi_jj' : dchi_jj_arr_x,
 
-               'chi_jEj0' : chi_jEj0_arr_x,
-               'chi_matj0' : chi_matj0_arr_x,
+               'chi_jjE0' : chi_jjE0_arr_x,
+               'chi_jmat0' : chi_jmat0_arr_x,
 
-               'dchi_matj' : dchi_matj_arr_x,
-               'dchi_jEj' : dchi_jEj_arr_x}
+               'dchi_jmat' : dchi_jmat_arr_x,
+               'dchi_jjE' : dchi_jjE_arr_x}
     
     results_y = {'chi0' : chi0_arr,
                'chi' : chi_rpa_arr,
@@ -1266,28 +1267,28 @@ def compute_chi(
                'chi_jj0' : chi_jj0_arr_y,
                'dchi_jj' : dchi_jj_arr_y,
 
-               'chi_jEj0' : chi_jEj0_arr_y,
-               'chi_matj0' : chi_matj0_arr_y,
+               'chi_jjE0' : chi_jjE0_arr_y,
+               'chi_jmat0' : chi_jmat0_arr_y,
 
-               'dchi_matj' : dchi_matj_arr_y,
-               'dchi_jEj' : dchi_jEj_arr_y}
+               'dchi_jmat' : dchi_jmat_arr_y,
+               'dchi_jjE' : dchi_jjE_arr_y}
     
     results_xy = {
         'chi_jj0': chi_jj0_arr_xy,
         'dchi_jj': dchi_jj_arr_xy,
-        'chi_jEj0': chi_jEj0_arr_xy,
-        'dchi_jEj': dchi_jEj_arr_xy,
-        'chi_matj0': chi_matj0_arr_xy,
-        'dchi_matj': dchi_matj_arr_xy,
+        'chi_jjE0': chi_jjE0_arr_xy,
+        'dchi_jjE': dchi_jjE_arr_xy,
+        'chi_jmat0': chi_jmat0_arr_xy,
+        'dchi_jmat': dchi_jmat_arr_xy,
     }
 
     results_yx = {
         'chi_jj0': chi_jj0_arr_yx,
         'dchi_jj': dchi_jj_arr_yx,
-        'chi_jEj0': chi_jEj0_arr_yx,
-        'dchi_jEj': dchi_jEj_arr_yx,
-        'chi_matj0': chi_matj0_arr_yx,
-        'dchi_matj': dchi_matj_arr_yx,
+        'chi_jjE0': chi_jjE0_arr_yx,
+        'dchi_jjE': dchi_jjE_arr_yx,
+        'chi_jmat0': chi_jmat0_arr_yx,
+        'dchi_jmat': dchi_jmat_arr_yx,
     }
     return results_x, results_y, results_xy, results_yx
 

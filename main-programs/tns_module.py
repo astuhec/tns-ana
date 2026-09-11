@@ -310,8 +310,8 @@ class TNS:
         phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
         phi_xy = tokovi.phi_Kubo(self.current_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
-        phiQ_xy = tokovi.phi_Kubo(self.mat_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
-        phiQ_yx = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
+        phiQ_xy = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
+        phiQ_yx = tokovi.phi_Kubo(self.current_y, self.mat_x, epsilons, self.energije, Gamma, self.mu)
 
         l11_x = np.pi * tokovi.integral_omega(phi_x * mfd1, epsilons)
         l12_x = np.pi * tokovi.integral_omega(epsilons * phi_x * mfd1, epsilons)
@@ -447,17 +447,17 @@ class TNS:
             l11x_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
             l11x[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jEj0 = - results_x['chi_jEj0'].imag
-            dChi_jEj = - results_x['dchi_jEj'].imag
-            Chi_jEj = Chi_jEj0 + dChi_jEj
-            l12x_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
-            l12x[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+            Chi_jjE0 = - results_x['chi_jjE0'].imag
+            dChi_jjE = - results_x['dchi_jjE'].imag
+            Chi_jjE = Chi_jjE0 + dChi_jjE
+            l12x_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
+            l12x[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_matj0 = - results_x['chi_matj0'].imag
-            dChi_matj = - results_x['dchi_matj'].imag
-            Chi_matj = Chi_matj0 + dChi_matj
-            l12qx_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            l12qx[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+            Chi_jmat0 = - results_x['chi_jmat0'].imag
+            dChi_jmat = - results_x['dchi_jmat'].imag
+            Chi_jmat = Chi_jmat0 + dChi_jmat
+            l12qx_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
+            l12qx[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
 
             ''' yy '''
             Chi_jj0 = - results_y['chi_jj0'].imag
@@ -466,17 +466,17 @@ class TNS:
             l11y_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
             l11y[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jEj0 = - results_y['chi_jEj0'].imag
-            dChi_jEj = - results_y['dchi_jEj'].imag
-            Chi_jEj = Chi_jEj0 + dChi_jEj
-            l12y_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
-            l12y[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+            Chi_jjE0 = - results_y['chi_jjE0'].imag
+            dChi_jjE = - results_y['dchi_jjE'].imag
+            Chi_jjE = Chi_jjE0 + dChi_jjE
+            l12y_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
+            l12y[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_matj0 = - results_y['chi_matj0'].imag
-            dChi_matj = - results_y['dchi_matj'].imag
-            Chi_matj = Chi_matj0 + dChi_matj
-            l12qy_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            l12qy[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+            Chi_jmat0 = - results_y['chi_jmat0'].imag
+            dChi_jmat = - results_y['dchi_jmat'].imag
+            Chi_jmat = Chi_jmat0 + dChi_jmat
+            l12qy_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
+            l12qy[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
 
             ''' xy '''
             Chi_jj0 = - results_xy['chi_jj0'].imag
@@ -485,17 +485,17 @@ class TNS:
             l11xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
             l11xy[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jEj0 = - results_xy['chi_jEj0'].imag
-            dChi_jEj = - results_xy['dchi_jEj'].imag
-            Chi_jEj = Chi_jEj0 + dChi_jEj
-            l12xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
-            l12xy[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+            Chi_jjE0 = - results_xy['chi_jjE0'].imag
+            dChi_jjE = - results_xy['dchi_jjE'].imag
+            Chi_jjE = Chi_jjE0 + dChi_jjE
+            l12xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
+            l12xy[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_matj0 = - results_xy['chi_matj0'].imag
-            dChi_matj = - results_xy['dchi_matj'].imag
-            Chi_matj = Chi_matj0 + dChi_matj
-            l12qxy_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            l12qxy[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+            Chi_jmat0 = - results_xy['chi_jmat0'].imag
+            dChi_jmat = - results_xy['dchi_jmat'].imag
+            Chi_jmat = Chi_jmat0 + dChi_jmat
+            l12qxy_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
+            l12qxy[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
 
             ''' yx '''
             Chi_jj0 = - results_yx['chi_jj0'].imag
@@ -504,17 +504,17 @@ class TNS:
             l11yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
             l11yx[g] = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jEj0 = - results_yx['chi_jEj0'].imag
-            dChi_jEj = - results_yx['dchi_jEj'].imag
-            Chi_jEj = Chi_jEj0 + dChi_jEj
-            l12yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
-            l12yx[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
+            Chi_jjE0 = - results_yx['chi_jjE0'].imag
+            dChi_jjE = - results_yx['dchi_jjE'].imag
+            Chi_jjE = Chi_jjE0 + dChi_jjE
+            l12yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
+            l12yx[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_matj0 = - results_yx['chi_matj0'].imag
-            dChi_matj = - results_yx['dchi_matj'].imag
-            Chi_matj = Chi_matj0 + dChi_matj
-            l12qyx_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            l12qyx[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+            Chi_jmat0 = - results_yx['chi_jmat0'].imag
+            dChi_jmat = - results_yx['dchi_jmat'].imag
+            Chi_jmat = Chi_jmat0 + dChi_jmat
+            l12qyx_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
+            l12qyx[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
 
         self.L11x_0.append(tokovi.to_scalar_if_single(l11x_0))
         self.L12x_0.append(tokovi.to_scalar_if_single(l12x_0))
