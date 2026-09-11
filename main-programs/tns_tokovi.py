@@ -240,6 +240,9 @@ def Kn_boltzmann(velocity_x, velocity_y, energije, mu, T):
     K1_x = []
     K1_y = []
 
+    K0_xy = []
+    K1_xy = []
+
     for orb in range(6):
         velx = velocity_x[orb]
         vely = velocity_y[orb]
@@ -255,13 +258,18 @@ def Kn_boltzmann(velocity_x, velocity_y, energije, mu, T):
                 K0_y.append( multiply * fd1_[m,n] * vely[m,n]**2 )
 
                 K1_x.append( multiply * en[m,n] * fd1_[m,n] * velx[m,n]**2 )
-                K1_y.append( multiply * en[m,n] * fd1_[m,n] * vely[m,n]**2 )   
+                K1_y.append( multiply * en[m,n] * fd1_[m,n] * vely[m,n]**2 )
 
-    K0_x = kahan_sum(K0_x) * 2 / Nk # factor 2 for spin
-    K0_y = kahan_sum(K0_y) * 2 / Nk
-    K1_x = kahan_sum(K1_x) * 2 / Nk
-    K1_y = kahan_sum(K1_y) * 2 / Nk   
-    return K0_x, K0_y, K1_x, K1_y
+                K0_xy.append( multiply * fd1_[m,n] * velx[m,n] * vely[m,n])
+                K1_xy.append( multiply * en[m,n] * fd1_[m,n] * velx[m,n] * vely[m,n])
+
+    K0_x = kahan_sum(K0_x) * 2.0 / Nk # factor 2 for spin
+    K0_y = kahan_sum(K0_y) * 2.0 / Nk
+    K1_x = kahan_sum(K1_x) * 2.0 / Nk
+    K1_y = kahan_sum(K1_y) * 2.0 / Nk
+    K0_xy = kahan_sum(K0_xy) * 2.0 / Nk
+    K1_xy = kahan_sum(K1_xy) * 2.0 / Nk
+    return K0_x, K1_x, K0_y, K1_y, K0_xy, K1_xy
 
 @njit
 def spektralna_orb(omegas, mu, energije_k, Gamma):
@@ -1651,3 +1659,41 @@ def to_scalar_if_single(x):
     if x.size == 1:
         return float(x.item())
     return x
+
+def Seebeck_matrix(L11_matrix, L12_matrix, Ts):
+    nT = len(Ts)
+    seebeck = np.zeros(L11_matrix.shape)
+    if L11_matrix.ndim == 4:
+        N_gamma = L11_matrix.shape[1]
+        for i in range(nT):
+            for j in range(N_gamma):
+                seebeck[i,j] = -1/Ts[i] * LA.inv(L11_matrix[i,j]) @ L12_matrix[i,j]
+    else:
+        N_gamma = 1
+        for i in range(nT):
+            seebeck[i] = -1/Ts[i] * LA.inv(L11_matrix[i]) @ L12_matrix[i]
+    return seebeck
+
+def Seebeck_naive(L11_matrix, L12_matrix, Ts):
+    Ts = np.array(Ts)
+    nT = len(Ts)
+    if L11_matrix.ndim == 4:
+        N_gamma = L11_matrix.shape[1]
+        seebeck = np.zeros((nT, N_gamma, 2))
+        L11x = L11_matrix[:,:,0,0]
+        L12x = L12_matrix[:,:,0,0]
+        L11y = L11_matrix[:,:,1,1]
+        L12y = L12_matrix[:,:,1,1]
+        for j in range(N_gamma):
+            seebeck[:,j,0] = -L12x[:,j] / L11x[:,j] / Ts
+            seebeck[:,j,1] = -L12y[:,j] / L11y[:,j] / Ts
+    else:
+        N_gamma = 1
+        seebeck = np.zeros((nT, 2))
+        L11x = L11_matrix[:,0,0]
+        L12x = L12_matrix[:,0,0]
+        L11y = L11_matrix[:,1,1]
+        L12y = L12_matrix[:,1,1]
+        seebeck[:,0] = -L12x / L11x / Ts
+        seebeck[:,1] = -L12y / L11y / Ts
+    return seebeck

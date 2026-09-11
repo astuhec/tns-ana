@@ -112,22 +112,34 @@ class TNS:
         self.occupations = []
         self.Ts = []
 
+        ''' Boltzmann coefficients '''
         self.L11x_boltz = []
         self.L11y_boltz = []
+
         self.L12x_boltz = []
         self.L12y_boltz = []
 
+        self.L11xy_boltz = []
+        self.L12xy_boltz = []
+
+        ''' Kubo coefficients from Kubo formula'''
         self.L11x = []
         self.L11y = []
         self.L12x = []
+
         self.L12y = []
         self.L12qx = []
         self.L12qy = []    
+
         self.L11xy = []    
         self.L12xy = []    
-        self.L12qxy = []    
+        self.L12qxy = []
+
+        self.L11yx = []
+        self.L12yx = [] 
         self.L12qyx = []    
 
+        ''' Kubo coefficients from omega to 0, without and without vertex corrections '''
         self.L11x_0 = []
         self.L12x_0 = []
         self.L12qx_0 = []
@@ -145,15 +157,16 @@ class TNS:
         self.L11xy_0 = []
         self.L12xy_0 = []
         self.L12qxy_0 = []
-        self.L12qyx_0 = []
         self.L11xy_corr = []
         self.L12xy_corr = []
         self.L12qxy_corr = []
-        self.L12qyx_corr = []  
+
         self.L11yx_0 = []
         self.L12yx_0 = []
+        self.L12qyx_0 = []
         self.L11yx_corr = []
         self.L12yx_corr = []
+        self.L12qyx_corr = [] 
 
     def velocities(self) -> None:
         # Boltzmann's group velocities using Hellmann-Feynmann
@@ -310,6 +323,7 @@ class TNS:
         phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
         phi_xy = tokovi.phi_Kubo(self.current_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
+        phi_yx = tokovi.phi_Kubo(self.current_y, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phiQ_xy = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
         phiQ_yx = tokovi.phi_Kubo(self.current_y, self.mat_x, epsilons, self.energije, Gamma, self.mu)
 
@@ -324,9 +338,12 @@ class TNS:
         l11_xy = np.pi * tokovi.integral_omega(phi_xy * mfd1, epsilons)
         l12_xy = np.pi * tokovi.integral_omega(epsilons * phi_xy * mfd1, epsilons)
         l12q_xy = np.pi * tokovi.integral_omega(phiQ_xy * mfd1, epsilons)
+
+        l11_yx = np.pi * tokovi.integral_omega(phi_yx * mfd1, epsilons)
+        l12_yx = np.pi * tokovi.integral_omega(epsilons * phi_yx * mfd1, epsilons)
         l12q_yx = np.pi * tokovi.integral_omega(phiQ_yx * mfd1, epsilons)
 
-        return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l12q_yx
+        return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx
     
     def DC_coefficients(self, eps, Nomega, Gammas):
         T = self.Ts[-1]
@@ -339,10 +356,34 @@ class TNS:
 
         # Boltzmann coefficients
         l11x_boltz = np.zeros(Ngamma)
-        l11y_boltz = np.zeros(Ngamma)
         l12x_boltz = np.zeros(Ngamma)
+
+        l11y_boltz = np.zeros(Ngamma)
         l12y_boltz = np.zeros(Ngamma)
-        K0b_x, K0b_y, K1b_x, K1b_y = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
+
+        l11xy_boltz = np.zeros(Ngamma)
+        l12xy_boltz = np.zeros(Ngamma)
+        K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
+        for g, Gamma in enumerate(Gammas):
+            tau_inv = 1 / (2.0 * Gamma)
+
+            l11x_boltz[g] = K0b_x * tau_inv
+            l11y_boltz[g] = K0b_y * tau_inv
+
+            l12x_boltz[g] = K1b_x * tau_inv
+            l12y_boltz[g] = K1b_y * tau_inv
+
+            l11xy_boltz[g] = K0b_xy * tau_inv
+            l12xy_boltz[g] = K1b_xy * tau_inv
+
+        self.L11x_boltz.append(tokovi.to_scalar_if_single(l11x_boltz))
+        self.L12x_boltz.append(tokovi.to_scalar_if_single(l12x_boltz))
+
+        self.L11y_boltz.append(tokovi.to_scalar_if_single(l11y_boltz))
+        self.L12y_boltz.append(tokovi.to_scalar_if_single(l12y_boltz))
+
+        self.L11xy_boltz.append(tokovi.to_scalar_if_single(l11xy_boltz))
+        self.L12xy_boltz.append(tokovi.to_scalar_if_single(l12xy_boltz))
 
         # Kubo coefficients
         l11x = np.zeros(Ngamma)
@@ -355,40 +396,43 @@ class TNS:
         l11xy = np.zeros(Ngamma)
         l12xy = np.zeros(Ngamma)
         l12qxy = np.zeros(Ngamma)
+
+        l11yx = np.zeros(Ngamma)
+        l12yx = np.zeros(Ngamma)
         l12qyx = np.zeros(Ngamma)
 
         for g, Gamma in enumerate(Gammas):
-            l11x_boltz[g] = K0b_x / (2*Gamma)
-            l11y_boltz[g] = K0b_y / (2*Gamma)
-            l12x_boltz[g] = K1b_x / (2*Gamma)
-            l12y_boltz[g] = K1b_y / (2*Gamma)
-
-            l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l12q_yx = self.ls_kubo(epsilons, Gamma, mfd1)
+            l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx = self.ls_kubo(epsilons, Gamma, mfd1)
             l11x[g] = l11_x.real
-            l11y[g] = l11_y.real
             l12x[g] = l12_x.real
-            l12y[g] = l12_y.real
             l12qx[g] = l12q_x.real
+
+            l11y[g] = l11_y.real
+            l12y[g] = l12_y.real
             l12qy[g] = l12q_y.real
+
             l11xy[g] = l11_xy.real
             l12xy[g] = l12_xy.real
             l12qxy[g] = l12q_xy.real
-            l12qyx[g] = l12q_yx.real
 
-        self.L11x_boltz.append(tokovi.to_scalar_if_single(l11x_boltz))
-        self.L11y_boltz.append(tokovi.to_scalar_if_single(l11y_boltz))
-        self.L12x_boltz.append(tokovi.to_scalar_if_single(l12x_boltz))
-        self.L12y_boltz.append(tokovi.to_scalar_if_single(l12y_boltz))
+            l11yx[g] = l11_yx.real
+            l12yx[g] = l12_yx.real
+            l12qyx[g] = l12q_yx.real
         
         self.L11x.append(tokovi.to_scalar_if_single(l11x))
-        self.L11y.append(tokovi.to_scalar_if_single(l11y))
         self.L12x.append(tokovi.to_scalar_if_single(l12x))
-        self.L12y.append(tokovi.to_scalar_if_single(l12y))
         self.L12qx.append(tokovi.to_scalar_if_single(l12qx))
+
+        self.L11y.append(tokovi.to_scalar_if_single(l11y))
+        self.L12y.append(tokovi.to_scalar_if_single(l12y))
         self.L12qy.append(tokovi.to_scalar_if_single(l12qy))
+
         self.L11xy.append(tokovi.to_scalar_if_single(l11xy))
         self.L12xy.append(tokovi.to_scalar_if_single(l12xy))
         self.L12qxy.append(tokovi.to_scalar_if_single(l12qxy))
+
+        self.L11yx.append(tokovi.to_scalar_if_single(l11yx))
+        self.L12yx.append(tokovi.to_scalar_if_single(l12yx))
         self.L12qyx.append(tokovi.to_scalar_if_single(l12qyx))
 
     def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
@@ -701,7 +745,38 @@ class TNS:
         print("Warning: bisection did not fully converge.", flush=True)
         return n_mid, mu_mid, err
 
+    def Lmatrix(self, x, y, xy, yx):
+        return np.stack(
+            (
+                np.stack((x, xy), axis=-1),
+                np.stack((yx, y), axis=-1),
+            ),
+            axis=-2,
+        )
+
+    def Seebeck_matrix(self, l11x, l12x, Ts):
+        return tokovi.Seebeck_matrix(l11x, l12x, Ts)
+
+    def Seebeck_naive(self, l11x, l12x, Ts):
+        return tokovi.Seebeck_naive(l11x, l12x, Ts)
+        
     def collect_results(self):
+
+        self.L11_boltz = self.Lmatrix(self.L11x_boltz, self.L11y_boltz, self.L11xy_boltz, self.L11xy_boltz)
+        self.L12_boltz = self.Lmatrix(self.L12x_boltz, self.L12y_boltz, self.L12xy_boltz, self.L12xy_boltz)
+
+        self.L11_kubo = self.Lmatrix(self.L11x, self.L11y, self.L11xy, self.L11yx)
+        self.L12_kubo = self.Lmatrix(self.L12x, self.L12y, self.L12xy, self.L12yx)
+        self.L12q_kubo = self.Lmatrix(self.L12qx, self.L12qy, self.L12qxy, self.L12qyx)
+
+        self.L11_kubo_0 = self.Lmatrix(self.L11x_0, self.L11y_0, self.L11xy_0, self.L11yx_0)
+        self.L12_kubo_0 = self.Lmatrix(self.L12x_0, self.L12y_0, self.L12xy_0, self.L12yx_0)
+        self.L12q_kubo_0 = self.Lmatrix(self.L12qx_0, self.L12qy_0, self.L12qxy_0, self.L12qyx_0)
+
+        self.L11_kubo_corr = self.Lmatrix(self.L11x_corr, self.L11y_corr, self.L11xy_corr, self.L11yx_corr)
+        self.L12_kubo_corr = self.Lmatrix(self.L12x_corr, self.L12y_corr, self.L12xy_corr, self.L12yx_corr)
+        self.L12q_kubo_corr = self.Lmatrix(self.L12qx_corr, self.L12qy_corr, self.L12qxy_corr, self.L12qyx_corr)
+
         results = {
             "phis": self.phis,
             "mus": self.mus,
@@ -712,45 +787,19 @@ class TNS:
 
             "Ts": self.Ts,
 
-            "L11x_boltz" : self.L11x_boltz,
-            "L11y_boltz" : self.L11y_boltz,
-            "L12x_boltz" : self.L12x_boltz,
-            "L12y_boltz" : self.L12y_boltz,
+            "L11_boltz" : self.L11_boltz,
+            "L12_boltz" : self.L12_boltz,
 
-            "L11x" : self.L11x,
-            "L11y" : self.L11y,
-            "L12x" : self.L12x,
-            "L12y" : self.L12y,
-            "L12qx" : self.L12qx,
-            "L12qy" : self.L12qy,
+            "L11_kubo" : self.L11_kubo,
+            "L12_kubo" : self.L12_kubo,
+            "L12q_kubo" : self.L12q_kubo,
+            "L11_kubo_0" : self.L11_kubo_0,
+            "L12_kubo_0" : self.L12_kubo_0,
+            "L12q_kubo_0" : self.L12q_kubo_0,
+            "L11_kubo_corr" : self.L11_kubo_corr,
+            "L12_kubo_corr" : self.L12_kubo_corr,
+            "L12q_kubo_corr" : self.L12q_kubo_corr,
 
-            "L11x_0" : self.L11x_0,
-            "L12x_0" : self.L12x_0,
-            "L12qx_0" : self.L12qx_0,
-            "L11x_corr" : self.L11x_corr,
-            "L12x_corr" : self.L12x_corr,
-            "L12qx_corr" : self.L12qx_corr,
-
-            "L11y_0" : self.L11y_0,
-            "L12y_0" : self.L12y_0,
-            "L12qy_0" : self.L12qy_0,
-            "L11y_corr" : self.L11y_corr,
-            "L12y_corr" : self.L12y_corr,
-            "L12qy_corr" : self.L12qy_corr,
-
-            "L11xy_0" : self.L11xy_0,
-            "L12xy_0" : self.L12xy_0,
-            "L12qxy_0" : self.L12qxy_0,
-            "L11xy_corr" : self.L11xy_corr,
-            "L12xy_corr" : self.L12xy_corr,
-            "L12qxy_corr" : self.L12qxy_corr,
-
-            "L11yx_0" : self.L11yx_0,
-            "L12yx_0" : self.L12yx_0,
-            "L12qyx_0" : self.L12qyx_0,
-            "L11yx_corr" : self.L11yx_corr,
-            "L12yx_corr" : self.L12yx_corr,
-            "L12qyx_corr" : self.L12qyx_corr,
             }
         
         return results
