@@ -1088,6 +1088,7 @@ def compute_single_om_fused(
         chi_rhoj0_x[i] = chi_UV(rho_i, tok_tilde_x, pi_mn, pi_nm)
         chi_rhojE0_x[i] = chi_UV(rho_i, tok_tilde_x, piw_mn, piw_nm)
         chi_rhomat0_x[i] = chi_UV(rho_i, mat_tilde_x, pi_mn, pi_nm)
+
         chi_jrho0_y[i] = chi_UV(tok_tilde_y, rho_i, pi_mn, pi_nm)
         chi_rhoj0_y[i] = chi_UV(rho_i, tok_tilde_y, pi_mn, pi_nm)
         chi_rhojE0_y[i] = chi_UV(rho_i, tok_tilde_y, piw_mn, piw_nm)
@@ -1098,16 +1099,22 @@ def compute_single_om_fused(
     inv     = LA.inv(mat)
     chi_rpa = inv @ chi0
 
+    ''' xx '''
     dchi_jj_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_jjE_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_x
     dchi_jmat_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_x
+
+    ''' yy '''
     dchi_jj_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jjE_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_y
     dchi_jmat_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_y
 
+    ''' xy '''
     dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
     dchi_jjE_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_y
+
+    ''' yx '''
     dchi_jjE_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_x
     dchi_jmat_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_y
     dchi_jmat_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_x
@@ -1126,6 +1133,7 @@ def compute_single_om_fused(
         chi_jj0_xy, dchi_jj_xy,
         chi_jj0_yx, dchi_jj_yx,
         chi_jjE0_xy, dchi_jjE_xy,
+
         chi_jjE0_yx, dchi_jjE_yx,
         chi_jmat0_xy, dchi_jmat_xy,
         chi_jmat0_yx, dchi_jmat_yx
