@@ -12,7 +12,7 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None):
+                 Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None, Gamma=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -21,6 +21,8 @@ class TNS:
         self.Ny = params["Ny"] if Ny==None else Ny
         self.Nx = params["Nx"] if Nx==None else Nx
 
+        self.Gamma = self._config_gamma(params) if Gamma is None else helpers.validate_gamma(Gamma)
+        self.T = 0.0
         self.N_epsilon = params["N_epsilon"]
         
         print(f'=' * 80 + '\n' + 'Started TNS calculation' + '\n' + f'=' * 80, flush=True)
@@ -60,10 +62,9 @@ class TNS:
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
         if mu==None:
-            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
-            self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, self.Gamma, eps0, self.a, self.U, self.V, epsilon=1e-10, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list, n_target=self.n_target)
         else:
-            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
+            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, helpers.Occupation(rho), fock, hartree
             self.mu = mu
         self.rho0 = self.rho
         self.mu0 = self.mu
@@ -103,6 +104,7 @@ class TNS:
         self.geom, self.phases = tokovi.input_data(self.kymesh, self.kxmesh, self.a, self.b, self.pos, self.kinetic_extend, self.interaction)
         self.thetas = tokovi.thetas_kernel(self.interaction, self.U, self.V, self.a)
         self.velocities()
+        self._ground_state = self.save_data()
         
         self.phis = []
         self.mus = []
@@ -168,6 +170,27 @@ class TNS:
         self.L12yx_corr = []
         self.L12qyx_corr = [] 
 
+    @staticmethod
+    def _config_gamma(params, default=0.0):
+        if 'Gamma' in params:
+            return helpers.validate_gamma(params['Gamma'])
+        if 'Gammas' in params:
+            widths = params['Gammas']
+            if len(widths) != 1:
+                raise ValueError("Use one Gamma per run; each width requires its own equilibrium state")
+            return helpers.validate_gamma(widths[0])
+        return helpers.validate_gamma(default)
+
+    def _check_gamma(self, params):
+        width = self._config_gamma(params, self.Gamma)
+        if width != self.Gamma:
+            raise ValueError("Gamma must match the equilibrium state; initialize a new TNS object for a different width")
+        return width
+
+    def _require_transport_state(self):
+        if self.Gamma <= 0 or not isinstance(self.T, (int, float, np.number)) or self.T <= 0:
+            raise ValueError("This transport integration requires Gamma > 0 and T > 0")
+
     def velocities(self) -> None:
         # Boltzmann's group velocities using Hellmann-Feynmann
         self.dfock_dk = tokovi.velocity_fock_HF(self.rho, self.kymesh, self.kxmesh, self.a, self.V)
@@ -202,7 +225,7 @@ class TNS:
         mu_candidate = self.mu
         rho, energije, fs, vecs, fock, hartree, err, n, mu = helpers.NewMu(self.n_target, self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
                                                                 self.a, self.U, self.V, self.T, mu_candidate, 
-                                                                dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
+                                                                dmu, self.Gamma, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
         self.rho = rho
         self.energije = energije
         self.fs = fs
@@ -212,6 +235,7 @@ class TNS:
         self.mu = mu
         self.err = err
         self.n = n
+        self.phi = helpers.Phi(self.kxmesh, self.rho, self.a)[0].real
 
     def run_Tdependence(self, input_temperature, save_during=False, file_name='out.npz', outfile_name='data_out.npz',
                         own_beta=None, betas_own=None, stops_own=None):
@@ -229,7 +253,7 @@ class TNS:
             print('Will calculate Kubo bubble DC coefficients and vertex corrections.', flush=True)
         if evaluate_transport_DC == False and evaluate_vertex_DC == False:
             print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).', flush=True)
-        Gammas = params_all['Gammas']
+        self._check_gamma(params_all)
         params = params_all['params']
         Nomega = params['Nomega']
         eps = params['eps']
@@ -259,6 +283,7 @@ class TNS:
 
         for i, beta in enumerate(betas):
             T = 1/beta
+            self.T_previous = self.T
             self.T = T
             if i not in stops:
                 if (i+1) in stops:
@@ -271,6 +296,7 @@ class TNS:
                     mu_save = self.mu
                     err_save = self.err
                     n_save = self.n
+                    T_save, phi_save = self.T_previous, self.phi
                 self.next_T(2)
             else:
                 self.next_T(1)
@@ -284,11 +310,12 @@ class TNS:
                 self.occupations.append(self.n)
 
                 if evaluate_transport_DC:
-                    self.DC_coefficients(eps, Nomega, Gammas)
+                    self.DC_coefficients(eps, Nomega)
 
                 if evaluate_vertex_DC:
-                    self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers)
+                    self.DC_bubble_corr(nodes, weights, omega0, eps2, n_workers)
 
+                measured_state = self.save_data() if save_during else None
                 if i > 0:
                     self.rho = rho_save
                     self.energije = energije_save
@@ -299,33 +326,27 @@ class TNS:
                     self.mu = mu_save
                     self.err = err_save
                     self.n = n_save
+                    self.T, self.phi = T_save, phi_save
 
                 if save_during:
                     results_intermediate = self.collect_results()
                     np.savez(file_name, **results_intermediate)
 
-                    data = {'rho' : self.rho,
-                            'T' : self.T,
-                            'vecs' : self.vecs,
-                            'mu' : self.mu,
-                            'energije' : self.energije,
-                            'hartree' : self.hartree,
-                            'fock' : self.fock,
-                            'fs' : self.fs}
+                    data = measured_state
                     np.savez(outfile_name, **data)
 
         print('-' * 80 + '\n' + \
               'Finished calculation.', flush=True)
 
-    def ls_kubo(self, epsilons, Gamma, mfd1):
-        phi_x = tokovi.phi_Kubo(self.current_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
-        phi_y = tokovi.phi_Kubo(self.current_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
-        phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
-        phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
-        phi_xy = tokovi.phi_Kubo(self.current_x, self.current_y, epsilons, self.energije, Gamma, self.mu)
-        phi_yx = tokovi.phi_Kubo(self.current_y, self.current_x, epsilons, self.energije, Gamma, self.mu)
-        phiQ_xy = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
-        phiQ_yx = tokovi.phi_Kubo(self.current_y, self.mat_x, epsilons, self.energije, Gamma, self.mu)
+    def ls_kubo(self, epsilons, mfd1):
+        phi_x = tokovi.phi_Kubo(self.current_x, self.current_x, epsilons, self.energije, self.Gamma, self.mu)
+        phi_y = tokovi.phi_Kubo(self.current_y, self.current_y, epsilons, self.energije, self.Gamma, self.mu)
+        phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, self.Gamma, self.mu)
+        phiQ_y = tokovi.phi_Kubo(self.mat_y, self.current_y, epsilons, self.energije, self.Gamma, self.mu)
+        phi_xy = tokovi.phi_Kubo(self.current_x, self.current_y, epsilons, self.energije, self.Gamma, self.mu)
+        phi_yx = tokovi.phi_Kubo(self.current_y, self.current_x, epsilons, self.energije, self.Gamma, self.mu)
+        phiQ_xy = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, self.Gamma, self.mu)
+        phiQ_yx = tokovi.phi_Kubo(self.current_y, self.mat_x, epsilons, self.energije, self.Gamma, self.mu)
 
         l11_x = np.pi * tokovi.integral_omega(phi_x * mfd1, epsilons)
         l12_x = np.pi * tokovi.integral_omega(epsilons * phi_x * mfd1, epsilons)
@@ -345,248 +366,188 @@ class TNS:
 
         return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx
     
-    def DC_coefficients(self, eps, Nomega, Gammas):
-        T = self.Ts[-1]
+    def DC_coefficients(self, eps, Nomega):
+        self._require_transport_state()
+        T = self.T
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*T))) * 2 * T)
         epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
         mfd1 = -tokovi.fd_1(epsilons, T)
 
-        Ngamma = len(Gammas)
         self.velocities()
 
         # Boltzmann coefficients
-        l11x_boltz = np.zeros(Ngamma)
-        l12x_boltz = np.zeros(Ngamma)
 
-        l11y_boltz = np.zeros(Ngamma)
-        l12y_boltz = np.zeros(Ngamma)
-
-        l11xy_boltz = np.zeros(Ngamma)
-        l12xy_boltz = np.zeros(Ngamma)
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
-        for g, Gamma in enumerate(Gammas):
-            tau_inv = 1 / (2.0 * Gamma)
+        
+        tau_inv = 1 / (2.0 * self.Gamma)
 
-            l11x_boltz[g] = K0b_x * tau_inv
-            l11y_boltz[g] = K0b_y * tau_inv
+        l11x_boltz = K0b_x * tau_inv
+        l11y_boltz = K0b_y * tau_inv
 
-            l12x_boltz[g] = K1b_x * tau_inv
-            l12y_boltz[g] = K1b_y * tau_inv
+        l12x_boltz = K1b_x * tau_inv
+        l12y_boltz = K1b_y * tau_inv
 
-            l11xy_boltz[g] = K0b_xy * tau_inv
-            l12xy_boltz[g] = K1b_xy * tau_inv
+        l11xy_boltz = K0b_xy * tau_inv
+        l12xy_boltz = K1b_xy * tau_inv
 
-        self.L11x_boltz.append(tokovi.to_scalar_if_single(l11x_boltz))
-        self.L12x_boltz.append(tokovi.to_scalar_if_single(l12x_boltz))
+        self.L11x_boltz.append(l11x_boltz)
+        self.L12x_boltz.append(l12x_boltz)
 
-        self.L11y_boltz.append(tokovi.to_scalar_if_single(l11y_boltz))
-        self.L12y_boltz.append(tokovi.to_scalar_if_single(l12y_boltz))
+        self.L11y_boltz.append(l11y_boltz)
+        self.L12y_boltz.append(l12y_boltz)
 
-        self.L11xy_boltz.append(tokovi.to_scalar_if_single(l11xy_boltz))
-        self.L12xy_boltz.append(tokovi.to_scalar_if_single(l12xy_boltz))
+        self.L11xy_boltz.append(l11xy_boltz)
+        self.L12xy_boltz.append(l12xy_boltz)
 
         # Kubo coefficients
-        l11x = np.zeros(Ngamma)
-        l11y = np.zeros(Ngamma)
-        l12x = np.zeros(Ngamma)
-        l12y = np.zeros(Ngamma)
-        l12qx = np.zeros(Ngamma)
-        l12qy = np.zeros(Ngamma)
+        l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx = self.ls_kubo(epsilons, mfd1)
+        l11x = l11_x.real
+        l12x = l12_x.real
+        l12qx = l12q_x.real
 
-        l11xy = np.zeros(Ngamma)
-        l12xy = np.zeros(Ngamma)
-        l12qxy = np.zeros(Ngamma)
+        l11y = l11_y.real
+        l12y = l12_y.real
+        l12qy = l12q_y.real
 
-        l11yx = np.zeros(Ngamma)
-        l12yx = np.zeros(Ngamma)
-        l12qyx = np.zeros(Ngamma)
+        l11xy = l11_xy.real
+        l12xy = l12_xy.real
+        l12qxy = l12q_xy.real
 
-        for g, Gamma in enumerate(Gammas):
-            l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx = self.ls_kubo(epsilons, Gamma, mfd1)
-            l11x[g] = l11_x.real
-            l12x[g] = l12_x.real
-            l12qx[g] = l12q_x.real
-
-            l11y[g] = l11_y.real
-            l12y[g] = l12_y.real
-            l12qy[g] = l12q_y.real
-
-            l11xy[g] = l11_xy.real
-            l12xy[g] = l12_xy.real
-            l12qxy[g] = l12q_xy.real
-
-            l11yx[g] = l11_yx.real
-            l12yx[g] = l12_yx.real
-            l12qyx[g] = l12q_yx.real
+        l11yx = l11_yx.real
+        l12yx = l12_yx.real
+        l12qyx = l12q_yx.real
         
-        self.L11x.append(tokovi.to_scalar_if_single(l11x))
-        self.L12x.append(tokovi.to_scalar_if_single(l12x))
-        self.L12qx.append(tokovi.to_scalar_if_single(l12qx))
+        self.L11x.append(l11x)
+        self.L12x.append(l12x)
+        self.L12qx.append(l12qx)
 
-        self.L11y.append(tokovi.to_scalar_if_single(l11y))
-        self.L12y.append(tokovi.to_scalar_if_single(l12y))
-        self.L12qy.append(tokovi.to_scalar_if_single(l12qy))
+        self.L11y.append(l11y)
+        self.L12y.append(l12y)
+        self.L12qy.append(l12qy)
 
-        self.L11xy.append(tokovi.to_scalar_if_single(l11xy))
-        self.L12xy.append(tokovi.to_scalar_if_single(l12xy))
-        self.L12qxy.append(tokovi.to_scalar_if_single(l12qxy))
+        self.L11xy.append(l11xy)
+        self.L12xy.append(l12xy)
+        self.L12qxy.append(l12qxy)
 
-        self.L11yx.append(tokovi.to_scalar_if_single(l11yx))
-        self.L12yx.append(tokovi.to_scalar_if_single(l12yx))
-        self.L12qyx.append(tokovi.to_scalar_if_single(l12qyx))
+        self.L11yx.append(l11yx)
+        self.L12yx.append(l12yx)
+        self.L12qyx.append(l12qyx)
 
-    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
+    def DC_bubble_corr(self, nodes, weights, omega0, eps, n_workers=None):
+        self._require_transport_state()
         self.velocities()
-        Ngamma = len(Gammas)
-
-        ''' xx ''' 
-        l11x_0 = np.zeros(Ngamma)
-        l12x_0 = np.zeros_like(l11x_0)
-        l12qx_0 = np.zeros_like(l11x_0)
-
-        l11x = np.zeros_like(l11x_0)
-        l12x = np.zeros_like(l12x_0)
-        l12qx = np.zeros_like(l12qx_0)
-
-        ''' yy ''' 
-        l11y_0 = np.zeros_like(l11x_0)
-        l12y_0 = np.zeros_like(l11x_0)
-        l12qy_0 = np.zeros_like(l11x_0)
-
-        l11y = np.zeros_like(l11x_0)
-        l12y = np.zeros_like(l12x_0)
-        l12qy = np.zeros_like(l12qx_0)
-
-        ''' xy '''
-        l11xy_0 = np.zeros_like(l11x_0)
-        l12xy_0 = np.zeros_like(l11x_0)
-        l12qxy_0 = np.zeros_like(l11x_0)
-
-        l11xy = np.zeros_like(l11x_0)
-        l12xy = np.zeros_like(l11x_0)
-        l12qxy = np.zeros_like(l11x_0)
-
-        ''' yx '''
-        l11yx_0 = np.zeros_like(l11x_0)
-        l12yx_0 = np.zeros_like(l11x_0)
-        l12qyx_0 = np.zeros_like(l11x_0)
-
-        l11yx = np.zeros_like(l11x_0)
-        l12yx = np.zeros_like(l11x_0)
-        l12qyx = np.zeros_like(l11x_0)
 
         self.factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
-        for g, Gamma in enumerate(Gammas):
-            mu_ = self.mu / Gamma
-            invt = Gamma / self.Ts[-1]
+        mu_ = self.mu / self.Gamma
+        invt = self.Gamma / self.T
 
-            rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-            results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
+        rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
+        results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0,self.Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
 
-            ''' xx '''
-            Chi_jj0 = - results_x['chi_jj0'].imag
-            dChi_jj  = - results_x['dchi_jj'].imag
-            Chi_jj = Chi_jj0 + dChi_jj
-            l11x_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
-            l11x[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+        ''' xx '''
+        Chi_jj0 = - results_x['chi_jj0'].imag
+        dChi_jj  = - results_x['dchi_jj'].imag
+        Chi_jj = Chi_jj0 + dChi_jj
+        l11x_0 = tokovi.find_DC_limit(omega0, Chi_jj0)
+        l11x = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jjE0 = - results_x['chi_jjE0'].imag
-            dChi_jjE = - results_x['dchi_jjE'].imag
-            Chi_jjE = Chi_jjE0 + dChi_jjE
-            l12x_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
-            l12x[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
+        Chi_jjE0 = - results_x['chi_jjE0'].imag
+        dChi_jjE = - results_x['dchi_jjE'].imag
+        Chi_jjE = Chi_jjE0 + dChi_jjE
+        l12x_0 = tokovi.find_DC_limit(omega0, Chi_jjE0)
+        l12x = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_jmat0 = - results_x['chi_jmat0'].imag
-            dChi_jmat = - results_x['dchi_jmat'].imag
-            Chi_jmat = Chi_jmat0 + dChi_jmat
-            l12qx_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
-            l12qx[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
+        Chi_jmat0 = - results_x['chi_jmat0'].imag
+        dChi_jmat = - results_x['dchi_jmat'].imag
+        Chi_jmat = Chi_jmat0 + dChi_jmat
+        l12qx_0 = tokovi.find_DC_limit(omega0, Chi_jmat0)
+        l12qx = tokovi.find_DC_limit(omega0, Chi_jmat)
 
-            ''' yy '''
-            Chi_jj0 = - results_y['chi_jj0'].imag
-            dChi_jj  = - results_y['dchi_jj'].imag
-            Chi_jj = Chi_jj0 + dChi_jj
-            l11y_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
-            l11y[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+        ''' yy '''
+        Chi_jj0 = - results_y['chi_jj0'].imag
+        dChi_jj  = - results_y['dchi_jj'].imag
+        Chi_jj = Chi_jj0 + dChi_jj
+        l11y_0 = tokovi.find_DC_limit(omega0, Chi_jj0)
+        l11y = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jjE0 = - results_y['chi_jjE0'].imag
-            dChi_jjE = - results_y['dchi_jjE'].imag
-            Chi_jjE = Chi_jjE0 + dChi_jjE
-            l12y_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
-            l12y[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
+        Chi_jjE0 = - results_y['chi_jjE0'].imag
+        dChi_jjE = - results_y['dchi_jjE'].imag
+        Chi_jjE = Chi_jjE0 + dChi_jjE
+        l12y_0 = tokovi.find_DC_limit(omega0, Chi_jjE0)
+        l12y = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_jmat0 = - results_y['chi_jmat0'].imag
-            dChi_jmat = - results_y['dchi_jmat'].imag
-            Chi_jmat = Chi_jmat0 + dChi_jmat
-            l12qy_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
-            l12qy[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
+        Chi_jmat0 = - results_y['chi_jmat0'].imag
+        dChi_jmat = - results_y['dchi_jmat'].imag
+        Chi_jmat = Chi_jmat0 + dChi_jmat
+        l12qy_0 = tokovi.find_DC_limit(omega0, Chi_jmat0)
+        l12qy = tokovi.find_DC_limit(omega0, Chi_jmat)
 
-            ''' xy '''
-            Chi_jj0 = - results_xy['chi_jj0'].imag
-            dChi_jj  = - results_xy['dchi_jj'].imag
-            Chi_jj = Chi_jj0 + dChi_jj
-            l11xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
-            l11xy[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+        ''' xy '''
+        Chi_jj0 = - results_xy['chi_jj0'].imag
+        dChi_jj  = - results_xy['dchi_jj'].imag
+        Chi_jj = Chi_jj0 + dChi_jj
+        l11xy_0 = tokovi.find_DC_limit(omega0, Chi_jj0)
+        l11xy = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jjE0 = - results_xy['chi_jjE0'].imag
-            dChi_jjE = - results_xy['dchi_jjE'].imag
-            Chi_jjE = Chi_jjE0 + dChi_jjE
-            l12xy_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
-            l12xy[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
+        Chi_jjE0 = - results_xy['chi_jjE0'].imag
+        dChi_jjE = - results_xy['dchi_jjE'].imag
+        Chi_jjE = Chi_jjE0 + dChi_jjE
+        l12xy_0 = tokovi.find_DC_limit(omega0, Chi_jjE0)
+        l12xy = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_jmat0 = - results_xy['chi_jmat0'].imag
-            dChi_jmat = - results_xy['dchi_jmat'].imag
-            Chi_jmat = Chi_jmat0 + dChi_jmat
-            l12qxy_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
-            l12qxy[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
+        Chi_jmat0 = - results_xy['chi_jmat0'].imag
+        dChi_jmat = - results_xy['dchi_jmat'].imag
+        Chi_jmat = Chi_jmat0 + dChi_jmat
+        l12qxy_0 = tokovi.find_DC_limit(omega0, Chi_jmat0)
+        l12qxy = tokovi.find_DC_limit(omega0, Chi_jmat)
 
-            ''' yx '''
-            Chi_jj0 = - results_yx['chi_jj0'].imag
-            dChi_jj  = - results_yx['dchi_jj'].imag
-            Chi_jj = Chi_jj0 + dChi_jj
-            l11yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
-            l11yx[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+        ''' yx '''
+        Chi_jj0 = - results_yx['chi_jj0'].imag
+        dChi_jj  = - results_yx['dchi_jj'].imag
+        Chi_jj = Chi_jj0 + dChi_jj
+        l11yx_0 = tokovi.find_DC_limit(omega0, Chi_jj0)
+        l11yx = tokovi.find_DC_limit(omega0, Chi_jj)
 
-            Chi_jjE0 = - results_yx['chi_jjE0'].imag
-            dChi_jjE = - results_yx['dchi_jjE'].imag
-            Chi_jjE = Chi_jjE0 + dChi_jjE
-            l12yx_0[g] = tokovi.find_DC_limit(omega0, Chi_jjE0)
-            l12yx[g] = tokovi.find_DC_limit(omega0, Chi_jjE)
+        Chi_jjE0 = - results_yx['chi_jjE0'].imag
+        dChi_jjE = - results_yx['dchi_jjE'].imag
+        Chi_jjE = Chi_jjE0 + dChi_jjE
+        l12yx_0 = tokovi.find_DC_limit(omega0, Chi_jjE0)
+        l12yx = tokovi.find_DC_limit(omega0, Chi_jjE)
 
-            Chi_jmat0 = - results_yx['chi_jmat0'].imag
-            dChi_jmat = - results_yx['dchi_jmat'].imag
-            Chi_jmat = Chi_jmat0 + dChi_jmat
-            l12qyx_0[g] = tokovi.find_DC_limit(omega0, Chi_jmat0)
-            l12qyx[g] = tokovi.find_DC_limit(omega0, Chi_jmat)
+        Chi_jmat0 = - results_yx['chi_jmat0'].imag
+        dChi_jmat = - results_yx['dchi_jmat'].imag
+        Chi_jmat = Chi_jmat0 + dChi_jmat
+        l12qyx_0 = tokovi.find_DC_limit(omega0, Chi_jmat0)
+        l12qyx = tokovi.find_DC_limit(omega0, Chi_jmat)
 
-        self.L11x_0.append(tokovi.to_scalar_if_single(l11x_0))
-        self.L12x_0.append(tokovi.to_scalar_if_single(l12x_0))
-        self.L12qx_0.append(tokovi.to_scalar_if_single(l12qx_0))
-        self.L11x_corr.append(tokovi.to_scalar_if_single(l11x))
-        self.L12x_corr.append(tokovi.to_scalar_if_single(l12x))
-        self.L12qx_corr.append(tokovi.to_scalar_if_single(l12qx))
+        self.L11x_0.append(l11x_0)
+        self.L12x_0.append(l12x_0)
+        self.L12qx_0.append(l12qx_0)
+        self.L11x_corr.append(l11x)
+        self.L12x_corr.append(l12x)
+        self.L12qx_corr.append(l12qx)
 
-        self.L11y_0.append(tokovi.to_scalar_if_single(l11y_0))
-        self.L12y_0.append(tokovi.to_scalar_if_single(l12y_0))
-        self.L12qy_0.append(tokovi.to_scalar_if_single(l12qy_0))
-        self.L11y_corr.append(tokovi.to_scalar_if_single(l11y))
-        self.L12y_corr.append(tokovi.to_scalar_if_single(l12y))
-        self.L12qy_corr.append(tokovi.to_scalar_if_single(l12qy))
+        self.L11y_0.append(l11y_0)
+        self.L12y_0.append(l12y_0)
+        self.L12qy_0.append(l12qy_0)
+        self.L11y_corr.append(l11y)
+        self.L12y_corr.append(l12y)
+        self.L12qy_corr.append(l12qy)
 
-        self.L11xy_0.append(tokovi.to_scalar_if_single(l11xy_0))
-        self.L12xy_0.append(tokovi.to_scalar_if_single(l12xy_0))
-        self.L12qxy_0.append(tokovi.to_scalar_if_single(l12qxy_0))
-        self.L11xy_corr.append(tokovi.to_scalar_if_single(l11xy))
-        self.L12xy_corr.append(tokovi.to_scalar_if_single(l12xy))
-        self.L12qxy_corr.append(tokovi.to_scalar_if_single(l12qxy))
+        self.L11xy_0.append(l11xy_0)
+        self.L12xy_0.append(l12xy_0)
+        self.L12qxy_0.append(l12qxy_0)
+        self.L11xy_corr.append(l11xy)
+        self.L12xy_corr.append(l12xy)
+        self.L12qxy_corr.append(l12qxy)
 
-        self.L11yx_0.append(tokovi.to_scalar_if_single(l11yx_0))
-        self.L12yx_0.append(tokovi.to_scalar_if_single(l12yx_0))
-        self.L12qyx_0.append(tokovi.to_scalar_if_single(l12qyx_0))
-        self.L11yx_corr.append(tokovi.to_scalar_if_single(l11yx))
-        self.L12yx_corr.append(tokovi.to_scalar_if_single(l12yx))
-        self.L12qyx_corr.append(tokovi.to_scalar_if_single(l12qyx))
+        self.L11yx_0.append(l11yx_0)
+        self.L12yx_0.append(l12yx_0)
+        self.L12qyx_0.append(l12qyx_0)
+        self.L11yx_corr.append(l11yx)
+        self.L12yx_corr.append(l12yx)
+        self.L12qyx_corr.append(l12qyx)
 
     def optical_responses(self, input_optical, json_file=True, Gammas=None):
         if json_file:
@@ -606,10 +567,14 @@ class TNS:
         deg = params['deg']
         nodes, weights = roots_legendre(deg)
         n_workers = params['n_workers']
-        Gamma = params['Gamma']
+        Gamma = self._check_gamma(params)
+        self._require_transport_state()
+        if Gammas is not None and not np.all(np.asarray(Gammas) == Gamma):
+            raise ValueError("Band-dependent widths require matching equilibrium occupations")
+        self.velocities()
         eps = params['eps']
 
-        invt = Gamma / self.Ts[-1]
+        invt = Gamma / self.T
         mu_ = self.mu / Gamma
 
         rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
@@ -620,48 +585,43 @@ class TNS:
                                                   n_workers=n_workers, eps=eps, Gammas=Gammas )
         return omega0, results_x, results_y, results_xy, results_yx
 
+    def _restore_state(self, state):
+        self._check_gamma(state)
+        for key, value in state.items():
+            setattr(self, key, value.copy() if isinstance(value, np.ndarray) else value)
+        self.velocities()
+
     def reset(self):
-        self.rho = self.rho0
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
-        self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        self.mu = self.mu0
+        self._restore_state(self._ground_state)
 
     def reset_infty(self):
-        self.rho = helpers.Rhoinfty(self.Ny, self.Nx)
+        self.rho = np.zeros((6, 6, self.Ny, self.Nx), dtype=complex)
+        idx = np.arange(6)
+        self.rho[idx, idx] = self.n_target / 6
+        self.T = 'infty'
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
-        self.energije = energije
-        self.fs = fs
-        self.vecs = vecs
+        self.energije, self.vecs, self.fs = helpers.H_diagonalize(
+            self.hop, self.perturb, self.hartree, self.fock, self.T, self.mu,
+            self.Gamma, n_target=self.n_target)
+        self.n = helpers.Occupation(self.rho)
+        self.err = 0.0
+        self.phi = helpers.Phi(self.kxmesh, self.rho, self.a)[0].real
+        self.velocities()
 
     def save_data(self):
-        data = {'rho' : self.rho,
-                'energije' : self.energije,
-                'fs' : self.fs,
-                'vecs' : self.vecs,
-                'fock' : self.fock,
-                'hartree' : self.hartree,
-                'mu' : self.mu,
-                'phi' : self.phi
-                }
-        return data
-    
-    # remember state with n=2 at some temperature
-    def remember_T(self) -> None:
-        self.mu_T = self.mu
-        self.rho_T = self.rho
-        self.energije_T = self.energije
-        self.vecs_T = self.vecs
+        keys = ('rho', 'energije', 'fs', 'vecs', 'fock', 'hartree', 'mu',
+                'phi', 'T', 'Gamma', 'n', 'err')
+        return {key: getattr(self, key).copy() if isinstance(getattr(self, key), np.ndarray)
+                else getattr(self, key) for key in keys}
 
-    # go back to state with n=2 at some temperature
+    def remember_T(self) -> None:
+        self._remembered_state = self.save_data()
+        self.mu_T, self.rho_T = self.mu, self.rho.copy()
+        self.energije_T, self.vecs_T = self.energije.copy(), self.vecs.copy()
+
     def revisit_T(self) -> None:
-        self.mu = self.mu_T
-        self.rho = self.rho_T
-        self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
-        self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        self.energije = self.energije_T
-        self.vecs = self.vecs_T
+        self._restore_state(self._remembered_state)
 
     def newOccupation(self, n_target, Dmu, steps, epsilon, maxiter, mix=0.5):
         n0 = helpers.Occupation(self.rho)
@@ -672,13 +632,16 @@ class TNS:
         fock = self.fock
         mu = self.mu
         for i in range(steps):
-            rho_new, energije_new, _, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, maxiter, mix, epsilon, 0.0, 5, hartree_list=self.hartree_list)
+            rho_new, energije_new, fs_new, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, self.Gamma, maxiter, mix, epsilon, 0.0, 5, hartree_list=self.hartree_list, n_target=n_target)
             if np.sign(n_target - n0) * np.sign(n - n_target) == +1:
                 break
             print(n, flush=True)
         mu = mu + i*dmu
         self.rho = rho_new
         self.energije = energije_new
+        self.fs = fs_new
+        self.n, self.err = n, err
+        self.phi = helpers.Phi(self.kxmesh, self.rho, self.a)[0].real
         self.vecs = vecs_new
         self.hartree = hartree_new
         self.fock = fock_new
@@ -786,6 +749,7 @@ class TNS:
             "occupations": self.occupations,
 
             "Ts": self.Ts,
+            "Gamma": self.Gamma,
 
             "L11_boltz" : self.L11_boltz,
             "L12_boltz" : self.L12_boltz,
