@@ -1018,7 +1018,7 @@ def chi_UV(U, V, pi_mn, pi_nm):
             chi_i += chi_ij
 
         chi += chi_i
-    return chi / Nk * 2.0 # factor 2 for spin     
+    return chi / Nk # do not multiiply here by 2 for spin; multiply the coefficients K0,K1
 
 def get_rho_tilde(i, cache, factory, lock):
     if i not in cache:
@@ -1265,46 +1265,46 @@ def compute_chi(
                 dchi_jmat_arr_yx[om_idx] = dchi_jmat_yx
                 pbar.update(1)
 
-    results_x = {'chi0' : chi0_arr,
-               'chi' : chi_rpa_arr,
+    results_x = {'chi0' : chi0_arr * 2.0,
+               'chi' : chi_rpa_arr * 2.0,
 
-               'chi_jj0' : chi_jj0_arr_x,
-               'dchi_jj' : dchi_jj_arr_x,
+               'chi_jj0' : chi_jj0_arr_x * 2.0,
+               'dchi_jj' : dchi_jj_arr_x * 2.0,
 
-               'chi_jjE0' : chi_jjE0_arr_x,
-               'chi_jmat0' : chi_jmat0_arr_x,
+               'chi_jjE0' : chi_jjE0_arr_x * 2.0,
+               'chi_jmat0' : chi_jmat0_arr_x * 2.0,
 
-               'dchi_jmat' : dchi_jmat_arr_x,
-               'dchi_jjE' : dchi_jjE_arr_x}
+               'dchi_jmat' : dchi_jmat_arr_x * 2.0,
+               'dchi_jjE' : dchi_jjE_arr_x * 2.0}
     
-    results_y = {'chi0' : chi0_arr,
-               'chi' : chi_rpa_arr,
+    results_y = {'chi0' : chi0_arr * 2.0,
+               'chi' : chi_rpa_arr * 2.0,
 
-               'chi_jj0' : chi_jj0_arr_y,
-               'dchi_jj' : dchi_jj_arr_y,
+               'chi_jj0' : chi_jj0_arr_y * 2.0,
+               'dchi_jj' : dchi_jj_arr_y * 2.0,
 
-               'chi_jjE0' : chi_jjE0_arr_y,
-               'chi_jmat0' : chi_jmat0_arr_y,
+               'chi_jjE0' : chi_jjE0_arr_y * 2.0,
+               'chi_jmat0' : chi_jmat0_arr_y * 2.0,
 
-               'dchi_jmat' : dchi_jmat_arr_y,
-               'dchi_jjE' : dchi_jjE_arr_y}
+               'dchi_jmat' : dchi_jmat_arr_y * 2.0,
+               'dchi_jjE' : dchi_jjE_arr_y * 2.0}
     
     results_xy = {
-        'chi_jj0': chi_jj0_arr_xy,
-        'dchi_jj': dchi_jj_arr_xy,
-        'chi_jjE0': chi_jjE0_arr_xy,
-        'dchi_jjE': dchi_jjE_arr_xy,
-        'chi_jmat0': chi_jmat0_arr_xy,
-        'dchi_jmat': dchi_jmat_arr_xy,
+        'chi_jj0': chi_jj0_arr_xy * 2.0,
+        'dchi_jj': dchi_jj_arr_xy * 2.0,
+        'chi_jjE0': chi_jjE0_arr_xy * 2.0,
+        'dchi_jjE': dchi_jjE_arr_xy * 2.0,
+        'chi_jmat0': chi_jmat0_arr_xy * 2.0,
+        'dchi_jmat': dchi_jmat_arr_xy * 2.0,
     }
 
     results_yx = {
-        'chi_jj0': chi_jj0_arr_yx,
-        'dchi_jj': dchi_jj_arr_yx,
-        'chi_jjE0': chi_jjE0_arr_yx,
-        'dchi_jjE': dchi_jjE_arr_yx,
-        'chi_jmat0': chi_jmat0_arr_yx,
-        'dchi_jmat': dchi_jmat_arr_yx,
+        'chi_jj0': chi_jj0_arr_yx * 2.0,
+        'dchi_jj': dchi_jj_arr_yx * 2.0,
+        'chi_jjE0': chi_jjE0_arr_yx * 2.0,
+        'dchi_jjE': dchi_jjE_arr_yx * 2.0,
+        'chi_jmat0': chi_jmat0_arr_yx * 2.0,
+        'dchi_jmat': dchi_jmat_arr_yx * 2.0,
     }
     return results_x, results_y, results_xy, results_yx
 
