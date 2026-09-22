@@ -32,6 +32,7 @@ class TNS:
         self.b = params["b"] # A
         self.b2 = params["b2"] # A
         self.c = params["c"] # A
+        self.Gamma = params["Gamma"] # eV
 
         self.parameters1 = list(params["parameters1"].values())
         self.parameters2 = list(params["parameters2"].values())
@@ -60,10 +61,12 @@ class TNS:
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
         if mu==None:
-            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
-            self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+            if self.Gamma==0.0:
+                self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
+                self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
         else:
-            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, 2.0, fock, hartree
+            n = helpers.Occupation(rho)
+            self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, n, fock, hartree
             self.mu = mu
         self.rho0 = self.rho
         self.mu0 = self.mu
@@ -229,7 +232,6 @@ class TNS:
             print('Will calculate Kubo bubble DC coefficients and vertex corrections.', flush=True)
         if evaluate_transport_DC == False and evaluate_vertex_DC == False:
             print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).', flush=True)
-        Gamma = params_all['Gamma']
         params = params_all['params']
         Nomega = params['Nomega']
         eps = params['eps']
@@ -284,10 +286,10 @@ class TNS:
                 self.occupations.append(self.n)
 
                 if evaluate_transport_DC:
-                    self.DC_coefficients(eps, Nomega, Gamma)
+                    self.DC_coefficients(eps, Nomega, self.Gamma)
 
                 if evaluate_vertex_DC:
-                    self.DC_bubble_corr(nodes, weights, Gamma, omega0, eps2, n_workers)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma, omega0, eps2, n_workers)
 
                 if i > 0:
                     self.rho = rho_save
