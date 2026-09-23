@@ -13,7 +13,7 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
-                 V=None, U=None, mu=None, Gamma=None):
+                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -34,7 +34,8 @@ class TNS:
         self.b2 = params["b2"] # A
         self.c = params["c"] # A
 
-        self.Gamma = params["Gamma"] if Gamma==None else Gamma
+        self.Gamma_tr = params["Gamma_tr"] if Gamma_tr==None else Gamma_tr
+        self.Gamma_oc = params["Gamma_oc"] if Gamma_oc==None else Gamma_oc
 
         self.parameters1 = list(params["parameters1"].values())
         self.parameters2 = list(params["parameters2"].values())
@@ -60,20 +61,14 @@ class TNS:
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
 
-        ''' if ground state is not provided, compute it 
-            else: use the provided gorund state'''
-        if fock==None:
+        if fock==None:      # if input data is not provided, find GS
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, 0.0, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list)
-            if not np.isfinite(self.err) or self.err > 1e-12:
-                raise RuntimeError("Unbroadened ground-state seed did not converge")
             mu0 = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
-            if self.Gamma==0.0:
-                if self.n_target != 2.0 or np.max(self.energije[1]) > np.min(self.energije[2]):
-                    raise ValueError("Sharp ground-state initialization requires two filled bands and a gap")
+            if self.Gamma_oc==0.0:
                 self.mu = mu0
             else:
-                self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0.0, self.mu, self.parameters1[0], self.Gamma, 1000, 0.5, 1e-12, 0.0, self.N_epsilon, self.hartree_list, self.n_target, 1e-7)
-        else:
+                self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0.0, self.mu, self.parameters1[0], self.Gamma_oc, 1000, 0.5, 1e-12, 0.0, self.N_epsilon, self.hartree_list, self.n_target, 1e-7)
+        else:      # if input data is provided, use it to initialize
             n = helpers.Occupation(rho)
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, n, fock, hartree
             self.mu = mu
@@ -214,7 +209,7 @@ class TNS:
         mu_candidate = self.mu
         rho, energije, fs, vecs, fock, hartree, err, n, mu = helpers.NewMu(self.n_target, self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
                                                                 self.a, self.U, self.V, self.T, mu_candidate, 
-                                                                dmu, self.Gamma, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
+                                                                dmu, self.Gamma_oc, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
         self.rho = rho
         self.energije = energije
         self.fs = fs
@@ -295,10 +290,10 @@ class TNS:
                 self.occupations.append(self.n)
 
                 if evaluate_transport_DC:
-                    self.DC_coefficients(eps, Nomega, self.Gamma)
+                    self.DC_coefficients(eps, Nomega, self.Gamma_tr)
 
                 if evaluate_vertex_DC:
-                    self.DC_bubble_corr(nodes, weights, self.Gamma, omega0, eps2, n_workers)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers)
 
                 if i > 0:
                     self.rho = rho_save
