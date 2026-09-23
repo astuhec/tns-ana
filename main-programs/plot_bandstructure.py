@@ -15,9 +15,8 @@ def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0)
     c2=np.array(matplotlib.colors.to_rgb(c2))
     return matplotlib.colors.to_hex((1-mix)*c1 + mix*c2)
 
-def bands(energije, barve, mu, name='bands', a=3.51, b=15.79, col1='firebrick', col2='blue'):
+def bands(energije, barve, mu, ylow=None,yhigh=None,name='bands', a=3.51, b=15.79, col1='firebrick', col2='blue'):
     fig, ax = plt.subplots(figsize=(6,4), facecolor='white')
-    #mu = 0.5 * (np.min(energije[2]) + np.max(energije[1]))
     Ny, Nx = energije.shape[-2:]
     kX = 2*np.pi / a
     kY = 2*np.pi / b
@@ -52,6 +51,12 @@ def bands(energije, barve, mu, name='bands', a=3.51, b=15.79, col1='firebrick', 
     ax.set_xticks([0, (Nx//2 -1)*kX, (Nx//2 -1)*kX + (Ny//2 - 1)*kY, (Nx//2 -1)*kX + (Ny//2 - 1)*kY + (Nx//2-1)*kX],)
     ax.set_xticklabels(['$M$', '$Z$', r'$\Gamma$', '$X$'])
 
+    Ev = np.min(energije[2])
+    Ec = np.max(energije[1])
+    ax.axhline((Ev+Ec)/2 - mu, ls='dashed', color='grey')
+
+    if ylow!=None and yhigh!=None:
+        ax.set_ylim(ylow, yhigh)
     plt.xticks(fontsize=15), plt.yticks(fontsize=18)
     plt.ylabel(r'$\varepsilon_{\bm{k}} - E_F\,[\text{eV}]$', fontsize=18)
 
