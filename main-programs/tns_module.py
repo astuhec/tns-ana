@@ -12,7 +12,8 @@ import tns_tokovi as tokovi
 ''' create TNS class '''
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
-                 Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None, V=None, U=None, mu=None):
+                 Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
+                 V=None, U=None, mu=None, Gamma=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -32,12 +33,13 @@ class TNS:
         self.b = params["b"] # A
         self.b2 = params["b2"] # A
         self.c = params["c"] # A
-        self.Gamma = params["Gamma"] # eV
+
+        self.Gamma = params["Gamma"] if Gamma==None else Gamma
 
         self.parameters1 = list(params["parameters1"].values())
         self.parameters2 = list(params["parameters2"].values())
 
-        self.mu = params["mu"]
+        self.mu = params["mu"] if mu==None else mu
         eps0 = params["eps0"]
 
         self.n_target = params["n_target"]
@@ -60,10 +62,17 @@ class TNS:
 
         ''' if ground state is not provided, compute it 
             else: use the provided gorund state'''
-        if mu==None:
+        if fock==None:
+            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, 0.0, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list)
+            if not np.isfinite(self.err) or self.err > 1e-12:
+                raise RuntimeError("Unbroadened ground-state seed did not converge")
+            mu0 = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
             if self.Gamma==0.0:
-                self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=5, hartree_list=self.hartree_list)
-                self.mu = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
+                if self.n_target != 2.0 or np.max(self.energije[1]) > np.min(self.energije[2]):
+                    raise ValueError("Sharp ground-state initialization requires two filled bands and a gap")
+                self.mu = mu0
+            else:
+                self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0.0, self.mu, self.parameters1[0], self.Gamma, 1000, 0.5, 1e-12, 0.0, self.N_epsilon, self.hartree_list, self.n_target, 1e-7)
         else:
             n = helpers.Occupation(rho)
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, n, fock, hartree
@@ -205,7 +214,7 @@ class TNS:
         mu_candidate = self.mu
         rho, energije, fs, vecs, fock, hartree, err, n, mu = helpers.NewMu(self.n_target, self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
                                                                 self.a, self.U, self.V, self.T, mu_candidate, 
-                                                                dmu, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
+                                                                dmu, self.Gamma, maxiter, maxiter_last, eps_last, mix, mix2, mix3, n_pass, max_trials, hartree_list=self.hartree_list)
         self.rho = rho
         self.energije = energije
         self.fs = fs
@@ -319,7 +328,7 @@ class TNS:
         print('-' * 80 + '\n' + \
               'Finished calculation.', flush=True)
 
-    def ls_kubo(self, epsilons, Gamma, mfd1):
+    def transport_functions(self, epsilons, Gamma):
         phi_x = tokovi.phi_Kubo(self.current_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phi_y = tokovi.phi_Kubo(self.current_y, self.current_y, epsilons, self.energije, Gamma, self.mu)
         phiQ_x = tokovi.phi_Kubo(self.mat_x, self.current_x, epsilons, self.energije, Gamma, self.mu)
@@ -328,7 +337,10 @@ class TNS:
         phi_yx = tokovi.phi_Kubo(self.current_y, self.current_x, epsilons, self.energije, Gamma, self.mu)
         phiQ_xy = tokovi.phi_Kubo(self.current_x, self.mat_y, epsilons, self.energije, Gamma, self.mu)
         phiQ_yx = tokovi.phi_Kubo(self.current_y, self.mat_x, epsilons, self.energije, Gamma, self.mu)
-
+        return phi_x, phi_y, phiQ_x, phiQ_y, phi_xy, phi_yx, phiQ_xy, phiQ_yx
+    
+    def ls_kubo(self, epsilons, Gamma, mfd1):
+        phi_x, phi_y, phiQ_x, phiQ_y, phi_xy, phi_yx, phiQ_xy, phiQ_yx = self.transport_functions(epsilons, Gamma)
         l11_x = np.pi * tokovi.integral_omega(phi_x * mfd1, epsilons)
         l12_x = np.pi * tokovi.integral_omega(epsilons * phi_x * mfd1, epsilons)
         l12q_x = np.pi * tokovi.integral_omega(phiQ_x * mfd1, epsilons)
@@ -567,7 +579,7 @@ class TNS:
         self.rho = helpers.Rhoinfty(self.Ny, self.Nx)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
-        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0, self.mu, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
+        _, energije, fs, vecs, _, _, _, _ = helpers.Rho_next(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.a, self.U, self.V, 0, self.mu, self.Gamma, 50, 0.5, 1e-10, eps0=0.0, N_epsilon=5, hartree_list=self.hartree_list)
         self.energije = energije
         self.fs = fs
         self.vecs = vecs
@@ -609,7 +621,7 @@ class TNS:
         fock = self.fock
         mu = self.mu
         for i in range(steps):
-            rho_new, energije_new, _, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, maxiter, mix, epsilon, 0.0, 5, hartree_list=self.hartree_list)
+            rho_new, energije_new, _, vecs_new, fock_new, hartree_new, err, n = helpers.Rho_next(self.kxmesh, rho, self.hop, self.perturb, hartree, fock, self.a, self.U, self.V, self.T, mu + i*dmu, self.Gamma, maxiter, mix, epsilon, 0.0, 5, hartree_list=self.hartree_list)
             if np.sign(n_target - n0) * np.sign(n - n_target) == +1:
                 break
             print(n, flush=True)
