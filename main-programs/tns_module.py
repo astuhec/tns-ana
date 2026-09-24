@@ -289,10 +289,10 @@ class TNS:
                 self.errors.append(self.err)
                 self.occupations.append(self.n)
 
-                if evaluate_transport_DC:
+                if self.Gamma_tr>0.0 and evaluate_transport_DC:
                     self.DC_coefficients(eps, Nomega, self.Gamma_tr)
 
-                if evaluate_vertex_DC:
+                if self.Gamma_tr>0.0 and evaluate_vertex_DC:
                     self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers)
 
                 if i > 0:
@@ -364,7 +364,8 @@ class TNS:
 
         # Boltzmann coefficients
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
-        tau_inv = 1 / (2.0 * Gamma)
+        tau_inv = 1 / (2.0)
+        # need to divide by Gamma to get tau_inv in Boltzmann!
 
         l11x_boltz = K0b_x * tau_inv
         l11y_boltz = K0b_y * tau_inv
