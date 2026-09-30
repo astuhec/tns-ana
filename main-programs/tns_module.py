@@ -13,9 +13,19 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
-                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, deg=None):
+                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, deg=None, *, initial_guess=False):
         
-        ''' read input parameter and initialize the system '''
+        """Read parameters and initialize the system.
+
+        By default, a supplied external state is reused without solving it.
+        With initial_guess=True, rho is required and is only a starting density:
+        rebuild its mean fields and solve the T=0 state and mu for n_target.
+        Other supplied state arrays are ignored; mu seeds the solve (or defaults
+        to the input file). Gamma_oc=0 supports only n_target=2.
+        """
+        if initial_guess and rho is None:
+            raise ValueError("initial_guess=True requires rho")
+
         with open(input_file, "r", encoding="utf-8") as f:
             params = json.load(f)
 
@@ -57,13 +67,22 @@ class TNS:
         self.perturb = helpers.H_perturb(self.kymesh, self.kxmesh, self.a, self.b, file=perturbation_file)
         self.hartree_list = helpers.make_hartree_list(interaction_file)
 
-        self.rho = helpers.Rho0(self.Ny, self.Nx)
+        self.rho = np.array(rho, dtype=complex, copy=True) if initial_guess else helpers.Rho0(self.Ny, self.Nx)
+        if initial_guess and self.rho.shape != (6, 6, self.Ny, self.Nx):
+            raise ValueError("Initial rho must have shape (6, 6, Ny, Nx)")
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
         
         state = (rho, energije, fs, vecs, fock, hartree)
 
-        if all(x is None for x in state):
+        if initial_guess:
+            self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(
+                self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
+                self.a, self.U, self.V, T=0.0, mu0=self.mu, dmu=self.parameters1[0],
+                Gamma=self.Gamma_oc, maxiter=1000, mix=0.5, epsilon=1e-12,
+                eps0=eps0, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list,
+                n_target=self.n_target, n_pass=1e-7)
+        elif all(x is None for x in state):
                   # if input data is not provided, find GS
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, 0.0, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list)
             mu0 = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
@@ -74,7 +93,6 @@ class TNS:
         else:      # if input data is provided, use it to initialize
             n = helpers.Occupation(rho)
             self.rho, self.energije, self.fs, self.vecs, self.err, self.n, self.fock, self.hartree = rho, energije, fs, vecs, 0.0, n, fock, hartree
-            self.mu = mu
         self.rho0 = self.rho
         self.mu0 = self.mu
 
