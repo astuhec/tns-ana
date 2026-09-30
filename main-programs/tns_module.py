@@ -60,8 +60,11 @@ class TNS:
         self.rho = helpers.Rho0(self.Ny, self.Nx)
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
+        
+        state = (rho, energije, fs, vecs, fock, hartree)
 
-        if np.sum(fock)==0:      # if input data is not provided, find GS
+        if all(x is None for x in state):
+                  # if input data is not provided, find GS
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, 0.0, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list)
             mu0 = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
             if self.Gamma_oc==0.0:
