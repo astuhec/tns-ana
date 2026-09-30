@@ -13,7 +13,7 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
-                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None):
+                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, deg=None):
         
         ''' read input parameter and initialize the system '''
         with open(input_file, "r", encoding="utf-8") as f:
@@ -221,7 +221,7 @@ class TNS:
         self.n = n
 
     def run_Tdependence(self, input_temperature, save_during=False, file_name='out.npz', outfile_name='data_out.npz',
-                        own_beta=None, betas_own=None, stops_own=None):
+                        own_beta=None, betas_own=None, stops_own=None, deg=None):
         
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
@@ -244,7 +244,7 @@ class TNS:
         omega0_len = params['omega0_len']
         omega0 = np.logspace(omega0_low, omega0_high, omega0_len)
         eps2 = params['eps2']
-        deg = params['deg']
+        deg = params['deg'] if deg==None else deg
         n_workers = params['n_workers']
 
         betas0 = params_all['beta0']
