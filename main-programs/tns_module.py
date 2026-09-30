@@ -13,7 +13,7 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
-                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, deg=None, *, initial_guess=False):
+                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, *, initial_guess=False):
         
         """Read parameters and initialize the system.
 
