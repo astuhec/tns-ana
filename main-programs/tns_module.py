@@ -61,7 +61,7 @@ class TNS:
         self.fock = helpers.H_fock(self.kxmesh, self.Nk, self.rho, self.a, self.V)
         self.hartree = helpers.H_hartree(self.rho, self.Nk, self.U, self.V, self.hartree_list)
 
-        if fock==None:      # if input data is not provided, find GS
+        if np.sum(fock)==0:      # if input data is not provided, find GS
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n = helpers.GS(self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock, self.mu, 0.0, eps0, self.a, self.U, self.V, epsilon=1e-12, maxiter=10000, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list)
             mu0 = 0.5 * (np.min(self.energije[2]) + np.max(self.energije[1]))
             if self.Gamma_oc==0.0:
@@ -358,7 +358,7 @@ class TNS:
         # Boltzmann coefficients
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
         tau_inv = 1 / (2.0 * Gamma)
-        
+
         l11x_boltz = K0b_x * tau_inv
         l11y_boltz = K0b_y * tau_inv
 
