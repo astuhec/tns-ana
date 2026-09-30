@@ -310,14 +310,7 @@ class TNS:
                     results_intermediate = self.collect_results()
                     np.savez(file_name, **results_intermediate)
 
-                    data = {'rho' : self.rho,
-                            'T' : self.T,
-                            'vecs' : self.vecs,
-                            'mu' : self.mu,
-                            'energije' : self.energije,
-                            'hartree' : self.hartree,
-                            'fock' : self.fock,
-                            'fs' : self.fs}
+                    data = self.collect_data()
                     np.savez(outfile_name, **data)
 
         print('-' * 80 + '\n' + \
@@ -364,9 +357,8 @@ class TNS:
 
         # Boltzmann coefficients
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
-        tau_inv = 1 / (2.0)
-        # need to divide by Gamma to get tau_inv in Boltzmann!
-
+        tau_inv = 1 / (2.0 * Gamma)
+        
         l11x_boltz = K0b_x * tau_inv
         l11y_boltz = K0b_y * tau_inv
 
@@ -704,7 +696,21 @@ class TNS:
 
     def Seebeck_naive(self, l11x, l12x, Ts):
         return tokovi.Seebeck_naive(l11x, l12x, Ts)
-        
+
+    def collect_data(self):
+        data = {'rho' : self.rho,
+                'T' : self.T,
+                'vecs' : self.vecs,
+                'mu' : self.mu,
+                'energije' : self.energije,
+                'hartree' : self.hartree,
+                'fock' : self.fock,
+                'fs' : self.fs,
+                'Gamma_tr' : self.Gamma_tr,
+                'Gamma_oc' : self.Gamma_oc
+                }
+        return data
+
     def collect_results(self):
 
         self.L11_boltz = self.Lmatrix(self.L11x_boltz, self.L11y_boltz, self.L11xy_boltz, self.L11xy_boltz)
