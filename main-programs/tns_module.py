@@ -13,7 +13,7 @@ import tns_tokovi as tokovi
 class TNS:
     def __init__(self, input_file, hopping_file, interaction_file, perturbation_file,
                  Ny=None, Nx=None, rho=None, energije=None, fs=None, vecs=None, fock=None, hartree=None, pos=None, faktor=None,
-                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, *, initial_guess=False):
+                 V=None, U=None, mu=None, Gamma_oc=None, Gamma_tr=None, *, n_target=None,initial_guess=False):
         
         """Read parameters and initialize the system.
 
@@ -53,7 +53,7 @@ class TNS:
         self.mu = params["mu"] if mu==None else mu
         eps0 = params["eps0"]
 
-        self.n_target = params["n_target"]
+        self.n_target = params["n_target"] if n_target==None else n_target
         self.faktor = params["faktor"] if faktor==None else faktor
 
         Ky = 2*np.pi/self.b * np.arange(-self.Ny//2, self.Ny//2) / self.Ny
