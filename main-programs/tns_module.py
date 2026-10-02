@@ -79,7 +79,7 @@ class TNS:
             self.rho, self.energije, self.fs, self.vecs, self.fock, self.hartree, self.err, self.n, self.mu = helpers.ground_state_fixed_filling(
                 self.kxmesh, self.rho, self.hop, self.perturb, self.hartree, self.fock,
                 self.a, self.U, self.V, T=0.0, mu0=self.mu, dmu=self.parameters1[0],
-                Gamma=self.Gamma_oc, maxiter=1000, mix=0.5, epsilon=1e-12,
+                Gamma=self.Gamma_oc, maxiter=5000, mix=0.5, epsilon=1e-12,
                 eps0=eps0, N_epsilon=self.N_epsilon, hartree_list=self.hartree_list,
                 n_target=self.n_target, n_pass=1e-7)
         elif all(x is None for x in state):
