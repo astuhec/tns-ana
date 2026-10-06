@@ -475,3 +475,7 @@ def DoS(Kymesh, Kxmesh, energije, omegas, mu, velocity_x, velocity_y, faktor=1.,
 
 def colors(vecs):
     return np.einsum('ijkl->jkl', np.abs(vecs[:4,:,:,:])**2)
+
+def spectral_orbital(om, energije, vecs, mu, Gamma):
+    A_n = Gamma / (np.pi * ((om - energije + mu)**2 + Gamma**2))
+    return np.einsum('anxy,nxy,bnxy->abxy', vecs, A_n, vecs.conj())
