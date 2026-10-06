@@ -479,3 +479,11 @@ def colors(vecs):
 def spectral_orbital(om, energije, vecs, mu, Gamma):
     A_n = Gamma / (np.pi * ((om - energije + mu)**2 + Gamma**2))
     return np.einsum('anxy,nxy,bnxy->abxy', vecs, A_n, vecs.conj())
+
+def A_orbital(omegas, energije, vecs, mu, Gamma):
+    Ny,Nx=energije.shape[1:]
+    Nomega = len(omegas)
+    A_orb = np.zeros((Nomega, 6,6,Ny,Nx), dtype=np.complex128)
+    for i, omega in enumerate(omegas):
+        A_orb[i] = spectral_orbital(omega, energije, vecs, mu, Gamma)
+    return A_orb
