@@ -439,7 +439,7 @@ def ground_state_fixed_filling(Kxmesh, rho, hop, perturb, hartree, fock, a, U, V
 
 ''' density of states '''
 @njit(parallel=False, cache=True)
-def DoS(Kymesh, Kxmesh, energije, omegas, mu, velocity_x, velocity_y, faktor=1.):
+def DoS(Kymesh, Kxmesh, energije, omegas, mu, velocity_x, velocity_y, faktor=1., Gamma=0.0):
     Ny, Nx = Kymesh.shape
     Nk = Ny*Nx
     dKy, dKx = Kymesh[:,0][1] - Kymesh[:,0][0], Kxmesh[0][1] - Kxmesh[0][0]
@@ -452,16 +452,25 @@ def DoS(Kymesh, Kxmesh, energije, omegas, mu, velocity_x, velocity_y, faktor=1.)
     for m in [0, Ny//2]:
         for n in range(Nx):
             for orb in range(6):
-                dos[orb] += 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                if Gamma==0.0:
+                    dos[orb] += 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                else:
+                    dos[orb] += 1/np.pi * Gamma / ((omegas - (energije[orb,m,n] - mu))**2 + Gamma**2)
     for n in [0, Nx//2]:
         for m in range(Ny):
             for orb in range(6):
-                dos[orb] += 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                if Gamma==0.0:
+                    dos[orb] += 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                else:
+                    dos[orb] += 1/np.pi * Gamma / ((omegas - (energije[orb,m,n] - mu))**2 + Gamma**2)
     for m in range(Ny):
         for n in prange(1,Nx//2):
             if m not in [0, Ny//2]:
                 for orb in range(6):
-                    dos[orb] += 2. * 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                    if Gamma==0.0:
+                        dos[orb] += 2. * 1/np.sqrt(2*np.pi*sigma**2) * np.exp(-(omegas - (energije[orb,m,n] - mu))**2/(2*sigma**2))
+                    else:
+                        dos[orb] += 1/np.pi * Gamma / / ((omegas - (energije[orb,m,n] - mu))**2 + Gamma**2)
     return dos * 2 / Nk # factor 2 for spin
 
 def colors(vecs):
