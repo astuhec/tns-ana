@@ -196,7 +196,7 @@ class TNS:
         self.L12yx_corr = []
         self.L12qyx_corr = [] 
 
-    def velocities(self) -> None:
+    def velocities(self, impose_additional=True) -> None:
         # Boltzmann's group velocities using Hellmann-Feynmann
         self.dfock_dk = tokovi.velocity_fock_HF(self.rho, self.kymesh, self.kxmesh, self.a, self.V)
         self.velocity_x = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[0] + self.dfock_dk[0], self.vecs).real)
@@ -207,8 +207,12 @@ class TNS:
         self.current_y = tokovi.hermitize_operator(tokovi.operator_tilde(self.tok[1], self.vecs))
 
         # non-local interaction current
-        mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V)
-        mat = mat1 + mat2 + mat3 + mat4
+        mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V,
+                                                                impose_additional=impose_additional)
+        if impose_additional:
+            mat = mat2 + mat3 + mat4
+        else:
+            mat = mat1 + mat2 + mat3 + mat4
         mat_dag = np.swapaxes(mat.conj(), 1, 2)
         relative_error = np.linalg.norm(mat - mat_dag) / max(np.linalg.norm(mat), 1e-30)
         assert relative_error < 1e-10, (
