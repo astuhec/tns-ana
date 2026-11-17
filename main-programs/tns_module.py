@@ -246,7 +246,7 @@ class TNS:
         self.n = n
 
     def run_Tdependence(self, input_temperature, save_during=False, file_name='out.npz', outfile_name='data_out.npz',
-                        own_beta=None, betas_own=None, stops_own=None, deg=None):
+                        own_beta=None, betas_own=None, stops_own=None, deg=None, impose_additional=True):
         
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
@@ -315,10 +315,10 @@ class TNS:
                 self.occupations.append(self.n)
 
                 if self.Gamma_tr>0.0 and evaluate_transport_DC:
-                    self.DC_coefficients(eps, Nomega, self.Gamma_tr)
+                    self.DC_coefficients(eps, Nomega, self.Gamma_tr, impose_additional=impose_additional)
 
                 if self.Gamma_tr>0.0 and evaluate_vertex_DC:
-                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers, impose_additional=impose_additional)
 
                 if i > 0:
                     self.rho = rho_save
@@ -372,13 +372,13 @@ class TNS:
 
         return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx
     
-    def DC_coefficients(self, eps, Nomega, Gamma):
+    def DC_coefficients(self, eps, Nomega, Gamma, impose_additional=True):
         T = self.Ts[-1]
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*T))) * 2 * T)
         epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
         mfd1 = -tokovi.fd_1(epsilons, T)
 
-        self.velocities()
+        self.velocities(impose_additional=impose_additional)
 
         # Boltzmann coefficients
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
@@ -436,8 +436,8 @@ class TNS:
         self.L12yx.append(l12yx)
         self.L12qyx.append(l12qyx)
 
-    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None):
-        self.velocities()
+    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, impose_additional=True):
+        self.velocities(impose_additional=impose_additional)
         self.factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
         mu_ = self.mu / Gamma
