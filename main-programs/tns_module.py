@@ -436,7 +436,8 @@ class TNS:
         self.L12yx.append(l12yx)
         self.L12qyx.append(l12qyx)
 
-    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, impose_additional=True):
+    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None,
+                       impose_additional=True):
         self.velocities(impose_additional=impose_additional)
         self.factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
