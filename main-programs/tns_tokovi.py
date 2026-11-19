@@ -3,6 +3,7 @@ import os, sys
 from numba import njit, prange
 import warnings
 import scipy.linalg as LA
+from scipy.special import psi as _psi
 from numba.core.errors import NumbaPerformanceWarning
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -280,7 +281,7 @@ def spektralna_orb(omegas, mu, energije_k, Gamma):
     return A
 
 @njit(parallel=True, cache=True)
-def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu, Gammas=None):
+def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu):
     Norb, Ny, Nx = energije.shape
     Nk = Ny*Nx
     Nw = len(epsilons)
@@ -296,22 +297,10 @@ def phi_Kubo(mat1, mat2, epsilons, energije, Gamma, mu, Gammas=None):
                 multiply = 1
             else:
                 multiply = 2
-            if Gammas==None:
-                A = spektralna_orb(epsilons, mu, energije[:,m,n], Gamma)
-                for a in range(Norb):
-                    for b in range(Norb):
-                        phi_local += multiply * (mat1[a,b,m,n] * A[:,b] * mat2[b,a,m,n] * A[:,a]).real
-            else:
-                A = np.empty((Nw, Norb))
-
-                for a in range(Norb):
-                    gamma_a = Gammas[a]
-                    delta_a = epsilons - (energije[a, m, n] - mu)
-                    A[:, a] = gamma_a / np.pi / (delta_a**2 + gamma_a**2)
-
-                for a in range(Norb):
-                    for b in range(Norb):
-                        phi_local += multiply * (mat1[a, b, m, n]* A[:, b]* mat2[b, a, m, n]* A[:, a]).real
+            A = spektralna_orb(epsilons, mu, energije[:,m,n], Gamma)
+            for a in range(Norb):
+                for b in range(Norb):
+                    phi_local += multiply * (mat1[a,b,m,n] * A[:,b] * mat2[b,a,m,n] * A[:,a]).real
         phi_temporary[m,:] = phi_local
 
     phi = np.sum(phi_temporary, axis=0)
@@ -401,7 +390,106 @@ def Jelements(kx,ky,qx,qy, geom, a, b, U, V, Nk):
                 mat_y[orb1-1,orb1_-1,orb2-1] += predf * lega[1]
     return mat_x, mat_y
 
-def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additional=True):
+''' correction Delta J_2 to the interaction energy current from subtracting <n> in H_int and P_int,
+    n_i n_j -> (n_i - <n_i>)(n_j - <n_j>)  (derivation: takarada/latex/tekst.tex). Per spin, 6x6:
+
+        Delta J_2 = sum i t_ab(d) [ 1/2 (h_a + h_b) rho_ab(d) - 1/2 (P_a - P_b) ] c^dag_{a,R+d} c_{b,R}
+
+        h_a = Hartree shift of orbital a, exactly as in helpers.H_hartree:
+              U <n_a>            from Hubbard (opposite spin only),
+              2 V <n_b> per bond from the nonlocal V (both spins of the partner),
+        P_a = sum over V-bonds of 2 V <n_b> rho_ab(bond)   (Hubbard: same site, no contribution),
+        rho_ab(d) = (x a, y b) + r_a - r_b,   <n_a> = per-spin density = sum_k rho[a,a] / Nk.
+
+    In the language of takarada/tekst.tex: mu_a = h_a / 2 and p_a = P_a / 2.
+
+    Factor 1/2: not needed on top of this. H_int = U sum n_up n_dn + V sum_bonds n_i n_j has
+    W_ij = U (opposite spins, same orbital) or V (all spin pairs of a bond); its Hartree shift is
+    h_i = sum_j W_ij <n_j>, which is the h above. The 0.5 in compute_all_mf_matrices only undoes
+    the double listing of each V-bond in `interaction`; here every bond is counted once per end.
+
+    Inputs as in the rest of this module: `kinetic` is the NON-extended list (tns_module: self.kinetic,
+    as for j_tok; off-diagonal hoppings listed once, h.c. added here), `interaction` from
+    interaction() (each V-bond in both orderings; orb1 == orb2 entries are the Hubbard U), pos from
+    positions() (1-based orbital index), rho of shape (6, 6, Ny, Nx).
+
+    Same-bond pairs (exclude_same_bond=True): a hopping line (x,y,a,b) together with the V-line on the same
+    bond, (x,y,a,b) or (-x,-y,b,a) (here: the Ta-Ni hybridizations on the eight V bonds). Of V n_a n_b only
+    the part where the partner has the same spin as the hopping electron is Pauli-forbidden,
+    [c^dag_{a s} c_{b s}, n_{a s} n_{b s}] = 0. In J2 (compute_all_mf_matrices) its Hartree half cancels
+    exactly against the same-bond exchange terms (M4a + M4b); the opposite-spin half is a genuine Hartree
+    term. So for these pairs only the opposite-spin Hartree term is subtracted: V <n_b> instead of
+    2 V <n_b> in h and P. Then dJ2 = -mat1 of compute_all_mf_matrices(impose_deltas=True) pair by pair,
+    and dJ2 + dJ2_nonlocI is unchanged (X_int = X_kin for these pairs). See takarada/latex/tekst.tex
+    (spinless case: there the whole same-bond Hartree term is Pauli-forbidden).
+
+    Returns (dJ2, dJ2_nonlocI), each (2, 6, 6, Ny, Nx) with components x, y:
+      dJ2         : part with interaction bond vectors (P terms) = -mat1 of compute_all_mf_matrices
+                    with impose_additional=False (same rho and the same impose_deltas as exclude_same_bond).
+      dJ2_nonlocI : part with kinetic bond vectors (Hartree h terms). compute_all_mf_matrices has no
+                    counterpart of this part (in takarada it pairs with M_nonlocI); the SB term contains it.
+    Their sum is the full Delta J_2. '''
+def delta_J2_tok(kinetic, interaction, pos, Kxmesh, Kymesh, rho, U, V, a, b, exclude_same_bond=True):
+    Ny, Nx = Kxmesh.shape
+    Nk = Ny * Nx
+    n = np.array([np.sum(rho[i, i]).real for i in range(6)]) / Nk     # per spin
+
+    h = np.zeros(7)            # 1-based orbital index, like pos
+    P = np.zeros((7, 2))
+    for x, y, orb1, orb2 in interaction:
+        orb1, orb2 = int(orb1), int(orb2)
+        if orb1 == orb2:
+            assert x == 0 and y == 0, "orb1 == orb2 entries are treated as on-site Hubbard U"
+            h[orb1] += U * n[orb1 - 1]
+        else:
+            bond = np.array([x * a, y * b]) + pos[orb1] - pos[orb2]
+            h[orb1] += 2.0 * V * n[orb2 - 1]
+            P[orb1] += 2.0 * V * n[orb2 - 1] * bond
+
+    dJ2 = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
+    dJ2_nonlocI = np.zeros((2, 6, 6, Ny, Nx), dtype=np.complex128)
+    for x, y, orb1, orb2, t in kinetic:
+        orb1, orb2 = int(orb1), int(orb2)
+        if orb1 == orb2 and x == 0 and y == 0:
+            continue                                  # onsite energy: zero bond, no contribution
+        h_l, P_l = h, P
+        if exclude_same_bond:
+            # remove the same-spin (Pauli-forbidden) half of the V-lines on this hopping bond
+            h_l, P_l = h.copy(), P.copy()
+            for x_, y_, orb1_, orb2_ in interaction:
+                orb1_, orb2_ = int(orb1_), int(orb2_)
+                if orb1_ == orb2_:
+                    continue
+                if (orb1_ == orb1 and orb2_ == orb2 and x_ == x and y_ == y) or \
+                   (orb1_ == orb2 and orb2_ == orb1 and x_ == -x and y_ == -y):
+                    bond = np.array([x_ * a, y_ * b]) + pos[orb1_] - pos[orb2_]
+                    h_l[orb1_] -= V * n[orb2_ - 1]
+                    P_l[orb1_] -= V * n[orb2_ - 1] * bond
+        phase = np.exp(-1j * (Kxmesh * x * a + Kymesh * y * b))
+        lega_kin = np.array([x * a, y * b]) + pos[orb1] - pos[orb2]
+        for nu in range(2):
+            loc = 1j * t * 0.5 * (P_l[orb2, nu] - P_l[orb1, nu]) * phase
+            nonloc = 1j * t * 0.5 * (h_l[orb1] + h_l[orb2]) * lega_kin[nu] * phase
+            dJ2[nu, orb1 - 1, orb2 - 1] += loc
+            dJ2_nonlocI[nu, orb1 - 1, orb2 - 1] += nonloc
+            if orb1 != orb2:
+                dJ2[nu, orb2 - 1, orb1 - 1] += loc.conj()
+                dJ2_nonlocI[nu, orb2 - 1, orb1 - 1] += nonloc.conj()
+    return hermitize_operator(dJ2), hermitize_operator(dJ2_nonlocI)
+
+
+''' Mean-field interaction-current matrices (interaction-bond vector piece only), returned as
+    0.5*M3, 0.5*M6, -0.5*M4a, -0.5*M4b.
+    impose_deltas=True imposes the Pauli principle explicitly on same-bond pairs (hopping line (x,y,a,b)
+    with the V-line (x,y,a,b) or (-x,-y,b,a)): the part of V n_a n_b with the partner in the same spin as the
+    hopping electron does not change under the hop, [c^dag_{a s} c_{b s}, n_{a s} n_{b s}] = 0. So for these
+    pairs M3 and M6 keep only the opposite-spin partner (V instead of 2V) and M4a, M4b (same spin only)
+    are dropped. The dropped terms cancel each other exactly, so the sum is the same as with
+    impose_deltas=False. The Hubbard lines (orb1_ == orb2_) are not affected: U n_up n_dn has no same-spin
+    part (and has zero bond vector here).
+    impose_additional=True is the older ad hoc variant (drops all of M3 and some M4 terms); do not
+    combine it with delta_J2_tok. '''
+def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additional=False, impose_deltas=True):
     # note: g_ffts argument is GONE, computed on the fly instead
     Ny, Nx = Kymesh.shape
     Nk = Ny * Nx
@@ -439,8 +527,11 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
             orb1_, orb2_ = int(orb1_), int(orb2_)
 
             if orb2 == orb2_:
+                # same-bond pair: V-line (x,y,a,b) on the hopping bond (x,y,a,b)
+                same = impose_deltas and orb1_ != orb2_ and orb1_ == orb1 and x_ == x and y_ == y
                 lega = lege[orb2] - lege[orb1_] - np.array([x_*a, y_*b])
                 if orb1_ == orb2_: V_ = U
+                elif same: V_ = V          # Pauli: only the opposite-spin partner
                 else: V_ = 2. * V
 
                 for nu in range(2):
@@ -455,7 +546,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
                 else: V_ = V
 
                 rho_fft = get_rho_fft(orb1_-1, orb1-1)
-                if impose_additional and orb1==orb1_ and x==x_ and x==0.0 and y==y_ and y==0.0:
+                if same or (impose_additional and orb1==orb1_ and x==x_ and x==0.0 and y==y_ and y==0.0):
                     faktor=0.0
                 else:
                     faktor=1.0
@@ -465,7 +556,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
                     M4a[nu, orb1_-1, orb2-1] += fk * gh * faktor
 
                 h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
-                if impose_additional and orb1_==orb2 and x_==0.0 and x==0.0 and y_==0.0 and y==0.0:
+                if same or (impose_additional and orb1_==orb2 and x_==0.0 and x==0.0 and y_==0.0 and y==0.0):
                     faktor=0.0
                 else:
                     faktor=1.0
@@ -475,8 +566,11 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
                     M4b[nu, orb1-1, orb1_-1] += gh * faktor
 
             if orb1 == orb2_:
+                # same-bond pair: V-line (-x,-y,b,a) on the hopping bond (x,y,a,b)
+                same = impose_deltas and orb1_ != orb2_ and orb1_ == orb2 and x_ == -x and y_ == -y
                 lega = lege[orb1] - lege[orb1_] - np.array([x_*a, y_*b])
                 if orb1_ == orb2_: V_ = U
+                elif same: V_ = V          # Pauli: only the opposite-spin partner
                 else: V_ = 2. * V
 
                 for nu in range(2):
@@ -489,7 +583,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
                 if orb1_ == orb2_: V_ = U
                 else: V_ = V
 
-                if impose_additional and orb1_==orb1 and x_==0.0 and x==0.0 and y_==0.0 and y==0.0:
+                if same or (impose_additional and orb1_==orb1 and x_==0.0 and x==0.0 and y_==0.0 and y==0.0):
                     faktor=0.0
                 else:
                     faktor=1.0
@@ -500,7 +594,7 @@ def compute_all_mf_matrices(Kymesh, rho, geom, phases, a, b, U, V, impose_additi
                     M4a[nu, orb1_-1, orb2-1] += fk * gh * faktor
 
                 h_fft = np.fft.fft2(np.fft.ifftshift(fk * rho[orb2-1, orb1_-1]))
-                if impose_additional and orb1_==orb2 and x+x_==0.0 and x==0.0 and y+y_==0.0 and y==0.0:
+                if same or (impose_additional and orb1_==orb2 and x+x_==0.0 and x==0.0 and y+y_==0.0 and y==0.0):
                     faktor=0.0
                 else:
                     faktor=1.0
@@ -882,7 +976,7 @@ def fd(eps, mu, T):
     return 1.0 / (np.exp((eps - mu) / T) + 1.0)
 
 @njit(cache=True)
-def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, x_m, x_n, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
+def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
     w    = omega / Gamma
     e_mk = E_mk  / Gamma
     e_nk = E_nk  / Gamma
@@ -941,10 +1035,10 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, x_m, x_n, mu_, invt, nodes, weight
         for i in range(n_nodes):
             e   = mid + half * nodes[i]
             ew  = e + w
-            dm  = (e - e_mk) / x_m
-            dn  = (e - e_nk) / x_n
-            dmw = (dm + w) / x_m
-            dnw = (dn + w) / x_n
+            dm  = e - e_mk
+            dn  = e - e_nk
+            dmw = dm + w
+            dnw = dn + w
             pref = e - mu_ + 0.5 * w
             wi   = weights[i] * half
 
@@ -979,18 +1073,15 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, x_m, x_n, mu_, invt, nodes, weight
             res_w_nm_r += wi * pref * nm_r
             res_w_nm_i += wi * pref * nm_i
 
-    x_mn = x_m * x_n
-    res_mn   = (res_mn_r   + 1j * res_mn_i)   / Gamma / x_mn
-    res_nm   = (res_nm_r   + 1j * res_nm_i)   / Gamma / x_mn
-    res_w_mn =  res_w_mn_r + 1j * res_w_mn_i / x_mn
-    res_w_nm =  res_w_nm_r + 1j * res_w_nm_i / x_mn
+    res_mn   = (res_mn_r   + 1j * res_mn_i)   / Gamma
+    res_nm   = (res_nm_r   + 1j * res_nm_i)   / Gamma
+    res_w_mn =  res_w_mn_r + 1j * res_w_mn_i
+    res_w_nm =  res_w_nm_r + 1j * res_w_nm_i
 
     return res_mn, res_nm, res_w_mn, res_w_nm
 
 @njit(parallel=True, cache=True)
-def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5, Gammas=None):
-    if Gammas==None:
-        x_m,x_n=1,1
+def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5):
     Norb, Ny, Nx = energije.shape
 
     pi_mn  = np.zeros((Norb, Norb, Ny, Nx), dtype=np.complex128)
@@ -1002,12 +1093,7 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
         for j in range(Nx):
             for m in range(Norb):
                 for n in range(m,Norb):
-                    if Gammas==None:
-                        x_m, x_n = 1, 1
-                    else:
-                        x_m = Gammas[m] / Gamma
-                        x_n = Gammas[n] / Gamma
-                    pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,i,j], energije[n,i,j], Gamma, x_m, x_n, mu_, invt, nodes, weights, eps)
+                    pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,i,j], energije[n,i,j], Gamma, mu_, invt, nodes, weights, eps)
 
                     pi_mn[m,n,i,j] = pi_mnk
                     pi_nm[m,n,i,j] = pi_nmk
@@ -1015,6 +1101,136 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
                     piw_nm[m,n,i,j] = pie_nmk
 
     return pi_mn, pi_nm, piw_mn, piw_nm
+
+''' Accurate Lorentzian bubbles, same output as precompute_Pi_all (default in compute_chi: bubble="exact").
+    Ported from takarada_tokovi.precompute_Pi_all_exact (see takarada/latex/tekst.tex, Sec. 7).
+    Why: Pi_bubble_tilde gets the imaginary parts right, but its real (static) parts can be off by
+    0.1-10 % and more, because the Gauss-Legendre nodes do not resolve the Lorentzians over the wide windows.
+    The real parts enter the RPA denominator 1 - chi0 Theta.
+
+    Real parts: closed form. With the integrand written as sum_j alpha_j/(e - z_j), sum_j alpha_j = 0,
+        int de f(e) sum_j alpha_j/(e - z_j) = sum_j alpha_j [psi(1/2 + s_j (z_j-mu)/(2 pi i T)) + i pi s_j/2],
+    s_j = sign(Im z_j), psi = digamma. Every pole is E_m + iG, E_m - iG, E_m + w + iG or E_m - w - iG of a
+    single band, so the digamma values are computed once per band and k and shared by all band pairs.
+    Imaginary parts: -pi int de A_m(e) A_n(e+w) [f(e) - f(e+w)] (x (e - mu + w/2) for the weighted bubble)
+    on a uniform grid with spacing h_over * min(Gamma, T) over the window where f(e) - f(e+w) is nonzero.
+    (The closed form loses precision for these tiny tail contributions in a gapped state.) '''
+def _Psi_digamma(z, mu, T):
+    s = np.sign(z.imag)
+    return _psi(0.5 + s * (z - mu) / (2j * np.pi * T)) + 0.5j * np.pi * s
+
+def _int_f_three_poles(poles, psis, n0, n1):
+    ''' int de f(e) (n0 + n1 e) / prod_j (e - poles[j]) for three simple poles; psis[j] = _Psi_digamma(poles[j]) '''
+    out = 0.0
+    for j in range(3):
+        den = 1.0
+        for l in range(3):
+            if l != j:
+                den = den * (poles[j] - poles[l])
+        out = out + (n0 + n1 * poles[j]) / den * psis[j]
+    return out
+
+def _bubble_half_from_psi(Em, En, w, G, mu, psis1, psis2):
+    ''' int de [A_m(e) G^R_n(e+w) f(e) + A_n(e+w) G^A_m(e) f(e+w)], plain and weighted with (e - mu + w/2);
+        Em, En arrays over k. Only the real parts are used. '''
+    c = G / np.pi
+    p1 = (Em + 1j * G, Em - 1j * G, En - w - 1j * G)      # A_m(e) G^R_n(e+w) f(e)
+    p2 = (En + 1j * G, En - 1j * G, Em + w + 1j * G)      # A_n(e') G^A_m(e'-w) f(e'), e' = e+w
+    t1 = _int_f_three_poles(p1, psis1, c, 0.0)
+    t2 = _int_f_three_poles(p2, psis2, c, 0.0)
+    t1w = _int_f_three_poles(p1, psis1, c * (-mu + 0.5 * w), c)
+    t2w = _int_f_three_poles(p2, psis2, c * (-mu - 0.5 * w), c)
+    return t1 + t2, t1w + t2w
+
+def _bubble_half_closed_form(Em, En, w, G, mu, T, psi_tab, m, n):
+    ''' real parts of the (m, n) half; psi_tab holds the per-band digamma values (Norb, Nk) '''
+    Pp, Pm, Qp, Qm = psi_tab        # Psi(E+iG), Psi(E-iG), Psi(E+w+iG), Psi(E-w-iG)
+    re, rew = _bubble_half_from_psi(Em, En, w, G, mu, (Pp[m], Pm[m], Qm[n]), (Pp[n], Pm[n], Qp[m]))
+    # coinciding poles when Em - En + w = 0: shift Em by a negligible amount (the result is continuous)
+    tiny = 1e-9 * G
+    bad = np.abs(Em - En + w) < tiny
+    if np.any(bad):
+        Emb, Enb = En[bad] - w + tiny, En[bad]
+        psis1 = tuple(_Psi_digamma(z, mu, T) for z in (Emb + 1j * G, Emb - 1j * G, Enb - w - 1j * G))
+        psis2 = tuple(_Psi_digamma(z, mu, T) for z in (Enb + 1j * G, Enb - 1j * G, Emb + w + 1j * G))
+        re[bad], rew[bad] = _bubble_half_from_psi(Emb, Enb, w, G, mu, psis1, psis2)
+    return re, rew
+
+@njit(parallel=True, cache=True)
+def _bubble_imag_window(omega, energije, Gamma, mu, T, lo, h, npts):
+    Norb, Nk = energije.shape
+    im_mn = np.zeros((Norb, Norb, Nk)); im_nm = np.zeros((Norb, Norb, Nk))
+    imw_mn = np.zeros((Norb, Norb, Nk)); imw_nm = np.zeros((Norb, Norb, Nk))
+    es = np.empty(npts); df = np.empty(npts); pref = np.empty(npts)
+    for i in range(npts):
+        e = lo + i * h
+        es[i] = e
+        x = (e - mu) / T
+        xw = (e + omega - mu) / T
+        ex = np.exp(-abs(x)); exw = np.exp(-abs(xw))
+        if x >= 0.0:
+            f, fc = ex / (1.0 + ex), 1.0 / (1.0 + ex)
+        else:
+            f, fc = 1.0 / (1.0 + ex), ex / (1.0 + ex)
+        if xw >= 0.0:
+            fw, fwc = exw / (1.0 + exw), 1.0 / (1.0 + exw)
+        else:
+            fw, fwc = 1.0 / (1.0 + exw), exw / (1.0 + exw)
+        if omega >= 0.0:
+            df[i] = f * fwc * (-np.expm1(-omega / T))      # f(e) - f(e+w), stable
+        else:
+            df[i] = -fw * fc * (-np.expm1(omega / T))
+        pref[i] = e - mu + 0.5 * omega
+    c = Gamma / np.pi
+    g2 = Gamma * Gamma
+    for j in prange(Nk):
+        for m in range(Norb):
+            for n in range(m, Norb):
+                Em = energije[m, j]; En = energije[n, j]
+                s_mn = 0.0; s_nm = 0.0; sw_mn = 0.0; sw_nm = 0.0
+                for i in range(npts):
+                    e = es[i]
+                    Am = c / ((e - Em) ** 2 + g2)
+                    An = c / ((e - En) ** 2 + g2)
+                    Amw = c / ((e + omega - Em) ** 2 + g2)
+                    Anw = c / ((e + omega - En) ** 2 + g2)
+                    v_mn = Am * Anw * df[i]
+                    v_nm = An * Amw * df[i]
+                    s_mn += v_mn; s_nm += v_nm
+                    sw_mn += v_mn * pref[i]; sw_nm += v_nm * pref[i]
+                im_mn[m, n, j] = -np.pi * h * s_mn
+                im_nm[m, n, j] = -np.pi * h * s_nm
+                imw_mn[m, n, j] = -np.pi * h * sw_mn
+                imw_nm[m, n, j] = -np.pi * h * sw_nm
+    return im_mn, im_nm, imw_mn, imw_nm
+
+def precompute_Pi_all_exact(omega, energije, Gamma, mu, T, n_T=40.0, h_over=0.05):
+    ''' same output as precompute_Pi_all, but mu and T in physical units (not scaled by Gamma) '''
+    if T <= 0.0:
+        raise ValueError("precompute_Pi_all_exact needs T > 0")
+    Norb, Ny, Nx = energije.shape
+    E = np.ascontiguousarray(energije.reshape(Norb, Ny * Nx), dtype=np.float64)
+    pi_mn = np.zeros((Norb, Norb, Ny * Nx), dtype=np.complex128)
+    pi_nm = np.zeros_like(pi_mn); piw_mn = np.zeros_like(pi_mn); piw_nm = np.zeros_like(pi_mn)
+
+    h = h_over * min(Gamma, T)
+    lo = mu - max(omega, 0.0) - n_T * T
+    hi = mu - min(omega, 0.0) + n_T * T
+    npts = int(np.ceil((hi - lo) / h)) + 1
+    im_mn, im_nm, imw_mn, imw_nm = _bubble_imag_window(omega, E, Gamma, mu, T, lo, h, npts)
+
+    psi_tab = (_Psi_digamma(E + 1j * Gamma, mu, T), _Psi_digamma(E - 1j * Gamma, mu, T),
+               _Psi_digamma(E + omega + 1j * Gamma, mu, T), _Psi_digamma(E - omega - 1j * Gamma, mu, T))
+    for m in range(Norb):
+        for n in range(m, Norb):
+            re_mn, rew_mn = _bubble_half_closed_form(E[m], E[n], omega, Gamma, mu, T, psi_tab, m, n)
+            re_nm, rew_nm = _bubble_half_closed_form(E[n], E[m], omega, Gamma, mu, T, psi_tab, n, m)
+            pi_mn[m, n] = re_mn.real + 1j * im_mn[m, n]
+            pi_nm[m, n] = re_nm.real + 1j * im_nm[m, n]
+            piw_mn[m, n] = rew_mn.real + 1j * imw_mn[m, n]
+            piw_nm[m, n] = rew_nm.real + 1j * imw_nm[m, n]
+    shape = (Norb, Norb, Ny, Nx)
+    return pi_mn.reshape(shape), pi_nm.reshape(shape), piw_mn.reshape(shape), piw_nm.reshape(shape)
 
 @njit(parallel=True, cache=True)
 def chi_UV(U, V, pi_mn, pi_nm):
@@ -1070,27 +1286,37 @@ def compute_single_om_fused(
     thetas, tok_tilde_x, mat_tilde_x, tok_tilde_y, mat_tilde_y,
     energije,
     rho_tilde_factory, rho_tilde_cache, rho_tilde_lock,
-    eps=1e-5, Gammas=None
+    eps=1e-5, bubble="exact"
 ):
     Nop = len(thetas)
-    
+
     thetas_diag = np.diag(thetas)
     I = np.eye(Nop)
 
     # ── ONE precomputation pass for this omega ──────────────────────────
-    pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
-        om, energije, Gamma, mu_, invt, nodes, weights, eps, Gammas
-    )
+    if bubble == "exact":
+        pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all_exact(
+            om, energije, Gamma, mu_ * Gamma, Gamma / invt)
+    elif bubble == "quadrature":
+        pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
+            om, energije, Gamma, mu_, invt, nodes, weights, eps
+        )
+    else:
+        raise ValueError("bubble must be 'exact' or 'quadrature'")
 
-    # ── chi0 matrix  (Nop x Nop calls, but now cheap) ──────────────────
+    # ── chi0 matrix and its energy-weighted version (each element computed once) ──
     chi0 = np.zeros((Nop, Nop), dtype=np.complex128)
-    
+    chi0E = np.zeros((Nop, Nop), dtype=np.complex128)
+
     for i in range(Nop):
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
-        for j in range(Nop):
+        for j in range(i, Nop):
             rho_j = get_rho_tilde(j, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
             chi0[i, j] = chi_UV(rho_i, rho_j, pi_mn, pi_nm)
-            chi0[j, i] = chi_UV(rho_j, rho_i, pi_mn, pi_nm)
+            chi0E[i, j] = chi_UV(rho_i, rho_j, piw_mn, piw_nm)
+            if j != i:
+                chi0[j, i] = chi_UV(rho_j, rho_i, pi_mn, pi_nm)
+                chi0E[j, i] = chi_UV(rho_j, rho_i, piw_mn, piw_nm)
 
     # ── chi_jj0 ────────────────────────────────────────────────────────
     chi_jj0_x = chi_UV(tok_tilde_x, tok_tilde_x, pi_mn, pi_nm)
@@ -1119,16 +1345,20 @@ def compute_single_om_fused(
     chi_rhoj0_y = np.zeros(Nop, dtype=np.complex128)
     chi_rhojE0_y = np.zeros(Nop, dtype=np.complex128)
     chi_rhomat0_y = np.zeros(Nop, dtype=np.complex128)
+    chi_jrhoE0_x = np.zeros(Nop, dtype=np.complex128)
+    chi_jrhoE0_y = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
         rho_i = get_rho_tilde(i, rho_tilde_cache, rho_tilde_factory, rho_tilde_lock)
         chi_jrho0_x[i] = chi_UV(tok_tilde_x, rho_i, pi_mn, pi_nm)
         chi_rhoj0_x[i] = chi_UV(rho_i, tok_tilde_x, pi_mn, pi_nm)
         chi_rhojE0_x[i] = chi_UV(rho_i, tok_tilde_x, piw_mn, piw_nm)
+        chi_jrhoE0_x[i] = chi_UV(tok_tilde_x, rho_i, piw_mn, piw_nm)
         chi_rhomat0_x[i] = chi_UV(rho_i, mat_tilde_x, pi_mn, pi_nm)
 
         chi_jrho0_y[i] = chi_UV(tok_tilde_y, rho_i, pi_mn, pi_nm)
         chi_rhoj0_y[i] = chi_UV(rho_i, tok_tilde_y, pi_mn, pi_nm)
         chi_rhojE0_y[i] = chi_UV(rho_i, tok_tilde_y, piw_mn, piw_nm)
+        chi_jrhoE0_y[i] = chi_UV(tok_tilde_y, rho_i, piw_mn, piw_nm)
         chi_rhomat0_y[i] = chi_UV(rho_i, mat_tilde_y, pi_mn, pi_nm)
 
     # ── RPA ────────────────────────────────────────────────────────────
@@ -1138,23 +1368,55 @@ def compute_single_om_fused(
 
     ''' xx '''
     dchi_jj_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_jjE_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_x
     dchi_jmat_x = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_x
 
     ''' yy '''
     dchi_jj_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_y
-    dchi_jjE_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_y
     dchi_jmat_y = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_y
 
     ''' xy '''
     dchi_jj_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhoj0_y
     dchi_jj_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhoj0_x
-    dchi_jjE_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhojE0_y
 
     ''' yx '''
-    dchi_jjE_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhojE0_x
     dchi_jmat_xy = chi_jrho0_x @ thetas_diag @ inv @ chi_rhomat0_y
     dchi_jmat_yx = chi_jrho0_y @ thetas_diag @ inv @ chi_rhomat0_x
+
+    # ── SB (energy-weighted) vertex corrections, full RPA ─────────────────────
+    # previous version: chi_jrho0 Theta inv chi_rhojE0, i.e. the energy weight always on the last bubble
+    # of the chain. In the DC limit this puts (e - mu) on static bubbles (whole Fermi sea), which breaks
+    # PH symmetry (takarada/latex/tekst.tex, Sec. 4-5 and 9).
+    # Now: in the operator space {j_x, j_y, rho_1..rho_Nop}, with M = 1 - chi0 Theta (Theta = 0 in the
+    # j rows) and A = (chi - chi^dag)/2i the absorptive part, the RPA gives exactly
+    #     A_full = M^-1 A0 M^-dag            (unweighted: reproduces -Im chi_jj^RPA).
+    # SB form: the absorptive pair carries the energy weight (e - mu + w/2), the full complex RPA
+    # vertex dresses it on both sides:  A^SB = M^-1 A0^(e) M^-dag.
+    ext = Nop + 2
+    chi0_ext = np.zeros((ext, ext), dtype=np.complex128)
+    chi0_ext[0, 0], chi0_ext[0, 1] = chi_jj0_x, chi_jj0_xy
+    chi0_ext[1, 0], chi0_ext[1, 1] = chi_jj0_yx, chi_jj0_y
+    chi0_ext[0, 2:], chi0_ext[1, 2:] = chi_jrho0_x, chi_jrho0_y
+    chi0_ext[2:, 0], chi0_ext[2:, 1] = chi_rhoj0_x, chi_rhoj0_y
+    chi0_ext[2:, 2:] = chi0
+
+    chi0E_ext = np.zeros((ext, ext), dtype=np.complex128)
+    chi0E_ext[0, 0], chi0E_ext[0, 1] = chi_jjE0_x, chi_jjE0_xy
+    chi0E_ext[1, 0], chi0E_ext[1, 1] = chi_jjE0_yx, chi_jjE0_y
+    chi0E_ext[0, 2:], chi0E_ext[1, 2:] = chi_jrhoE0_x, chi_jrhoE0_y
+    chi0E_ext[2:, 0], chi0E_ext[2:, 1] = chi_rhojE0_x, chi_rhojE0_y
+    chi0E_ext[2:, 2:] = chi0E
+
+    Th_ext = np.diag(np.concatenate(([0.0, 0.0], np.asarray(thetas, dtype=np.float64)))).astype(np.complex128)
+    Minv = LA.inv(np.eye(ext) - chi0_ext @ Th_ext)
+    A0E = (chi0E_ext - chi0E_ext.conj().T) / 2j
+    dAE = Minv @ A0E @ Minv.conj().T - A0E
+    # stored as complex numbers whose imaginary part is the absorptive vertex correction, so that
+    # -Im(dchi_jjE)/omega is the vertex correction, like for the other dchi's. For xy, yx this takes the
+    # real part of dAE[0,1], dAE[1,0] (they are real when chi_xy = chi_yx).
+    dchi_jjE_x = 1j * dAE[0, 0]
+    dchi_jjE_y = 1j * dAE[1, 1]
+    dchi_jjE_xy = 1j * dAE[0, 1]
+    dchi_jjE_yx = 1j * dAE[1, 0]
 
     return (
         om, chi0, chi_rpa,
@@ -1184,8 +1446,11 @@ def compute_chi(
     rho_tilde_factory,
     verbose=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
-    eps=1e-5, Gammas=None
+    eps=1e-5, bubble="exact"
 ):
+    ''' bubble="exact": accurate bubbles (precompute_Pi_all_exact, needs T > 0); "quadrature": previous
+        Gauss-Legendre bubbles (nodes, weights, eps are only used then).
+        'dchi_jjE' is the SB vertex correction in full RPA with the energy weight on the absorptive pair. '''
     omegas = np.asarray(omegas)
     N_om   = len(omegas)
     Nop    = len(thetas)
@@ -1202,7 +1467,7 @@ def compute_chi(
             rho_tilde_factory,
             rho_tilde_cache,   # <-- shared, persistent
             rho_tilde_lock,
-            eps=eps, Gammas=Gammas
+            eps=eps, bubble=bubble
         )
         return om_idx, result
 

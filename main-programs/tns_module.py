@@ -196,7 +196,17 @@ class TNS:
         self.L12yx_corr = []
         self.L12qyx_corr = [] 
 
-    def velocities(self, impose_additional=True) -> None:
+    def velocities(self, impose_deltas=True, impose_additional=False, add_delta_J2=True) -> None:
+        ''' mat_x, mat_y: non-local interaction current (interaction-bond vector piece), used as
+            L12 = SB + <j; mat>.
+            impose_deltas: Pauli principle explicitly on same-bond pairs (same-spin part), see
+            tokovi.compute_all_mf_matrices; does not change mat when add_delta_J2=True.
+            add_delta_J2: add the p-part of tokovi.delta_J2_tok (the <n>-subtraction in H_int, P_int), which
+            removes the Hartree term M3 (its opposite-spin part on same-bond pairs; the same-spin part is
+            cancelled by exchange). impose_additional=True is the older ad hoc removal of M3 and must not
+            be combined with add_delta_J2. See takarada/latex/tekst.tex. '''
+        if add_delta_J2 and impose_additional:
+            raise ValueError("add_delta_J2=True with impose_additional=True subtracts the Hartree part twice")
         # Boltzmann's group velocities using Hellmann-Feynmann
         self.dfock_dk = tokovi.velocity_fock_HF(self.rho, self.kymesh, self.kxmesh, self.a, self.V)
         self.velocity_x = np.einsum('iixy-> ixy', tokovi.operator_tilde(self.dH_dk[0] + self.dfock_dk[0], self.vecs).real)
@@ -208,11 +218,18 @@ class TNS:
 
         # non-local interaction current
         mat1, mat2, mat3, mat4 = tokovi.compute_all_mf_matrices(self.kymesh, self.rho, self.geom, self.phases, self.a, self.b, self.U, self.V,
-                                                                impose_additional=impose_additional)
+                                                                impose_additional=impose_additional, impose_deltas=impose_deltas)
         if impose_additional:
             mat = mat2 + mat3 + mat4
         else:
             mat = mat1 + mat2 + mat3 + mat4
+        if add_delta_J2:
+            # only the interaction-bond (p) part; the kinetic-bond part is contained in the SB term.
+            # exclude_same_bond=True for either impose_deltas: the same-spin same-bond Hartree term is cancelled
+            # by exchange (impose_deltas=False) or not there at all (impose_deltas=True), so it is never subtracted
+            dJ2, _ = tokovi.delta_J2_tok(self.kinetic, self.interaction, self.pos, self.kxmesh, self.kymesh, self.rho,
+                                         self.U, self.V, self.a, self.b, exclude_same_bond=True)
+            mat = mat + dJ2
         mat_dag = np.swapaxes(mat.conj(), 1, 2)
         relative_error = np.linalg.norm(mat - mat_dag) / max(np.linalg.norm(mat), 1e-30)
         assert relative_error < 1e-10, (
@@ -246,13 +263,22 @@ class TNS:
         self.n = n
 
     def run_Tdependence(self, input_temperature, save_during=False, file_name='out.npz', outfile_name='data_out.npz',
-                        own_beta=None, betas_own=None, stops_own=None, deg=None, impose_additional=True):
-        
+                        own_beta=None, betas_own=None, stops_own=None, deg=None,
+                        impose_deltas=True, impose_additional=False, add_delta_J2=True, bubble="exact"):
+        ''' impose_deltas, impose_additional, add_delta_J2: see velocities(). bubble: "exact" (accurate bubbles
+            for the vertex corrections) or "quadrature" (previous Gauss-Legendre bubbles). '''
+        if add_delta_J2 and impose_additional:
+            raise ValueError("add_delta_J2=True with impose_additional=True subtracts the Hartree part twice")
+
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
 
         evaluate_transport_DC = params_all['evaluate_transport_DC']
         evaluate_vertex_DC = params_all['evaluate_vertex_DC']
+        if evaluate_vertex_DC and self.Gamma_tr != self.Gamma_oc:
+            print(f'Warning: Gamma_tr={self.Gamma_tr} != Gamma_oc={self.Gamma_oc}. The vertex corrections '
+                  'are consistent (e.g. Goldstone mode) only if the ground state uses the same Gamma as the bubbles.',
+                  flush=True)
 
         print('Started to find temperature dependence of transport coefficients.', flush=True)
         if evaluate_transport_DC == True:
@@ -315,10 +341,12 @@ class TNS:
                 self.occupations.append(self.n)
 
                 if self.Gamma_tr>0.0 and evaluate_transport_DC:
-                    self.DC_coefficients(eps, Nomega, self.Gamma_tr, impose_additional=impose_additional)
+                    self.DC_coefficients(eps, Nomega, self.Gamma_tr, impose_deltas=impose_deltas,
+                                         impose_additional=impose_additional, add_delta_J2=add_delta_J2)
 
                 if self.Gamma_tr>0.0 and evaluate_vertex_DC:
-                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers, impose_additional=impose_additional)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers, impose_deltas=impose_deltas,
+                                        impose_additional=impose_additional, add_delta_J2=add_delta_J2, bubble=bubble)
 
                 if i > 0:
                     self.rho = rho_save
@@ -372,13 +400,13 @@ class TNS:
 
         return l11_x, l12_x, l12q_x, l11_y, l12_y, l12q_y, l11_xy, l12_xy, l12q_xy, l11_yx, l12_yx, l12q_yx
     
-    def DC_coefficients(self, eps, Nomega, Gamma, impose_additional=True):
+    def DC_coefficients(self, eps, Nomega, Gamma, impose_deltas=True, impose_additional=False, add_delta_J2=True):
         T = self.Ts[-1]
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*T))) * 2 * T)
         epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
         mfd1 = -tokovi.fd_1(epsilons, T)
 
-        self.velocities(impose_additional=impose_additional)
+        self.velocities(impose_deltas=impose_deltas, impose_additional=impose_additional, add_delta_J2=add_delta_J2)
 
         # Boltzmann coefficients
         K0b_x, K1b_x, K0b_y, K1b_y, K0b_xy, K1b_xy = tokovi.Kn_boltzmann(self.velocity_x, self.velocity_y, self.energije, self.mu, T)
@@ -437,15 +465,15 @@ class TNS:
         self.L12qyx.append(l12qyx)
 
     def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None,
-                       impose_additional=True):
-        self.velocities(impose_additional=impose_additional)
+                       impose_deltas=True, impose_additional=False, add_delta_J2=True, bubble="exact"):
+        self.velocities(impose_deltas=impose_deltas, impose_additional=impose_additional, add_delta_J2=add_delta_J2)
         self.factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
 
         mu_ = self.mu / Gamma
         invt = Gamma / self.Ts[-1]
 
         rho_tilde_factory = tokovi.make_rho_tilde_factory(self.interaction, self.a, self.b, self.kymesh, self.kxmesh, self.vecs)
-        results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True)
+        results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_x, self.mat_x, self.current_y, self.mat_y, self.energije, rho_tilde_factory, eps=eps, n_workers=n_workers, verbose=True, bubble=bubble)
 
         ''' xx '''
         Chi_jj0 = - results_x['chi_jj0'].imag
@@ -551,7 +579,7 @@ class TNS:
         self.L12yx_corr.append(l12yx)
         self.L12qyx_corr.append(l12qyx)
 
-    def optical_responses(self, input_optical, json_file=True, Gammas=None):
+    def optical_responses(self, input_optical, json_file=True, bubble="exact"):
         if json_file:
             with open(input_optical, "r", encoding="utf-8") as f:
                 params = json.load(f)
@@ -580,7 +608,7 @@ class TNS:
         results_x, results_y, results_xy, results_yx = tokovi.compute_chi(omega0, Gamma, mu_, invt, nodes, weights, self.thetas,
                                                   self.current_x, self.mat_x, self.current_y, self.mat_y,
                                                   self.energije, rho_tilde_factory,
-                                                  n_workers=n_workers, eps=eps, Gammas=Gammas )
+                                                  n_workers=n_workers, eps=eps, bubble=bubble)
         return omega0, results_x, results_y, results_xy, results_yx
 
     def reset(self):
